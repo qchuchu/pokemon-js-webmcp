@@ -169,3 +169,21 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Disclaimer
 
 This is a fan-made project and is not affiliated with or endorsed by Nintendo, Game Freak, or The Pokemon Company. All Pokemon-related content is property of their respective owners.
+
+## Deployment
+
+Live at **https://pokemon-js-production.up.railway.app**
+
+Deployed to Railway as a static site. Railpack builds with `yarn build` and
+serves `build/` with Caddy, configured entirely through service variables:
+
+| Variable | Why |
+| --- | --- |
+| `REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_ANON_KEY` | Baked into the bundle at build time, not read at runtime |
+| `RAILPACK_STATIC_FILE_ROOT=build` | Tells Railpack to serve the CRA output statically |
+| `RAILPACK_NODE_VERSION=22` | `@supabase/supabase-js` requires Node >= 22 |
+| `CI=false` | Railway sets `CI=true`, which makes `react-scripts build` fail on warnings |
+
+```bash
+railway up --service pokemon-js -m "<summary>"
+```
