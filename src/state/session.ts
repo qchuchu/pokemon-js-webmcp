@@ -1,4 +1,4 @@
-import { createClient, RealtimeChannel } from "@supabase/supabase-js";
+import { createClient, RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 import { AnyAction, Middleware } from "@reduxjs/toolkit";
 import { GameState } from "./state-types";
 import { BattleState } from "./battleSlice";
@@ -44,6 +44,13 @@ let peers: Peer[] = [];
 let log: LogEntry[] = [];
 let label = AGENT_ID;
 let hydrated = false;
+let client: SupabaseClient | null = null;
+// Nothing is written back until the room has been restored (or confirmed
+// empty). Otherwise the first tab to join would save its fresh Pallet Town
+// over the world everyone left behind.
+let restored = false;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let readSharedState: (() => SharedState) | null = null;
 // send() silently falls back to REST until the socket has joined, which would
 // turn every walk step into an HTTP request. Nothing goes out before this.
 let joined = false;
@@ -130,6 +137,7 @@ export const sharedActionMiddleware: Middleware = () => (next) => (action) => {
       event: "action",
       payload: { from: AGENT_ID, action: typed },
     });
+    if (readSharedState) scheduleSave(readSharedState);
   }
   return result;
 };
@@ -139,15 +147,97 @@ export interface SharedState {
   battle: BattleState;
 }
 
+const SAVE_DEBOUNCE = 2000;
+
+// How long to let live peers answer before falling back to the database.
+const HANDSHAKE_GRACE = 900;
+
+/**
+ * The room is the save file. Only the driver writes, and only after the room
+ * has been restored, so a late joiner can never clobber the shared world.
+ * Debounced because a single walk across a map is dozens of actions.
+ */
+const scheduleSave = (getSharedState: () => SharedState) => {
+  if (!client || !restored || !isDriver()) return;
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    saveTimer = null;
+    const { error } = await (client as SupabaseClient).from("rooms").upsert({
+      id: ROOM,
+      state: getSharedState(),
+      updated_at: new Date().toISOString(),
+    });
+    if (error) console.warn("[pokemon] could not save room", error.message);
+  }, SAVE_DEBOUNCE);
+};
+
+/** Load the room from the database when no one is already playing it. */
+const restoreRoom = async (dispatch: (action: AnyAction) => void) => {
+  if (!client || hydrated) return;
+
+  const { data, error } = await client
+    .from("rooms")
+    .select("state")
+    .eq("id", ROOM)
+    .maybeSingle();
+
+  // A tab that answered the live handshake while this request was in flight
+  // wins: its state is newer than anything on disk.
+  if (hydrated) return;
+
+  if (error) {
+    // Stay read-only rather than risk saving a fresh world over a real one.
+    console.warn("[pokemon] could not load room", error.message);
+    return;
+  }
+
+  if (data?.state) {
+    const state = data.state as SharedState;
+    applyingRemote = true;
+    try {
+      dispatch({ type: "game/hydrate", payload: state.game });
+      dispatch({ type: "battle/hydrateBattle", payload: state.battle });
+    } finally {
+      applyingRemote = false;
+    }
+    hydrated = true;
+  }
+
+  // Either the room was loaded or it genuinely has no save yet.
+  restored = true;
+};
+
+/** Flush the room now instead of waiting out the debounce. */
+export const saveNow = async (): Promise<string> => {
+  if (!isShared()) return "Running solo, so the room is not saved anywhere.";
+  if (!client || !readSharedState) return "Not connected to the room yet.";
+  if (!restored) return "Still catching up with the room, not saving yet.";
+
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  const { error } = await client.from("rooms").upsert({
+    id: ROOM,
+    state: readSharedState(),
+    updated_at: new Date().toISOString(),
+  });
+  return error ? `Could not save: ${error.message}` : `Saved room "${ROOM}".`;
+};
+
+export const isRestored = () => restored;
+
 export const connectSession = (
   dispatch: (action: AnyAction) => void,
   getSharedState: () => SharedState
 ) => {
   if (!isShared()) return () => {};
 
+  readSharedState = getSharedState;
+
   // No auth is used, and persisting a session would make every tab in this
   // browser share one storage key.
-  const client = createClient(url as string, anonKey as string, {
+  client = createClient(url as string, anonKey as string, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -193,6 +283,9 @@ export const connectSession = (
     } finally {
       applyingRemote = false;
     }
+    // Someone live is further along than the database, so this tab is caught
+    // up and may start saving.
+    restored = true;
   });
 
   // `state` fires whenever anyone joins or leaves, so one handler is enough.
@@ -215,6 +308,11 @@ export const connectSession = (
       event: "request-state",
       payload: { from: AGENT_ID },
     });
+
+    // Nobody answered, so the room is empty and the database holds the world.
+    setTimeout(() => {
+      restoreRoom(dispatch);
+    }, HANDSHAKE_GRACE);
   });
 
   return () => {
@@ -222,6 +320,10 @@ export const connectSession = (
     channel = null;
     hydrated = false;
     joined = false;
+    restored = false;
+    readSharedState = null;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = null;
     peers = [];
     notify();
   };

@@ -23,6 +23,7 @@ import {
   readLog,
   ROOM,
   say,
+  saveNow,
   setAgentLabel,
 } from "../state/session";
 
@@ -362,13 +363,30 @@ const GameTools = () => {
         you: AGENT_ID,
         shared: isShared(),
         ...(isShared()
-          ? { agents: listPeers(), recentNotes: readLog() }
+          ? {
+              agents: listPeers(),
+              recentNotes: readLog(),
+              persistence:
+                "The room autosaves; it is restored when everyone has left " +
+                "and someone rejoins. Use save_room to flush immediately.",
+            }
           : {
               note:
                 "Running solo: REACT_APP_SUPABASE_URL / REACT_APP_SUPABASE_ANON_KEY " +
                 "are unset, so this tab is not synced to a room.",
             }),
       }),
+  });
+
+  useMcpTool({
+    name: "save_room",
+    title: "Save the shared world now",
+    description:
+      "Force an immediate save of the room. The world autosaves a couple of " +
+      "seconds after anything changes, so this is only needed before everyone " +
+      "disconnects at once, or to confirm the save worked.",
+    input: z.object({}),
+    handler: async () => ok({ result: await saveNow() }),
   });
 
   useMcpTool({

@@ -47,6 +47,7 @@ like Claude Code or Cursor with the WebMCP Bridge Chrome extension.
 | `wait` | Let animations and transitions finish |
 | `get_party_agents` | Who else is in this world, and their recent notes |
 | `tell_agents` | Leave a note for the other agents |
+| `save_room` | Flush the shared world to the database immediately |
 
 ### One world, many agents
 
@@ -58,6 +59,8 @@ playing.
 
 ```bash
 cp .env.example .env   # add your Supabase URL and anon key
+supabase link --project-ref <your-project-ref>
+supabase db push       # creates the rooms table
 yarn start
 ```
 
@@ -69,6 +72,22 @@ The `game` and `battle` slices travel between tabs, so battles are shared too:
 every agent watches the same fight and any of them can take the turn. Menus and
 dialogue position stay per-agent, so two agents can be reading different screens
 of the same world.
+
+### Saving
+
+The room *is* the save file. The driver writes the world to a `rooms` row a
+couple of seconds after anything changes, and a tab that joins a room nobody is
+playing restores from there - so a world survives everyone disconnecting. Live
+peers always win over the database, so joining a room in progress catches you up
+to what is happening now rather than to the last write.
+
+`Start -> Save` and the `save_room` tool just flush immediately; there is
+nothing you have to remember to do. Without Supabase configured the game falls
+back to the original per-browser `localStorage` save.
+
+The migration in `supabase/migrations` leaves the `rooms` table readable and
+writable by `anon` on purpose: anyone who can load the game can join any room by
+name. Do not keep anything private in it.
 
 One tab is elected **driver** (the oldest in the room) and is the only one that
 runs the world's emergent logic - wild encounter rolls, battle choreography

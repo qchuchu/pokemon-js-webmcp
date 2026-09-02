@@ -22,6 +22,7 @@ import {
 import PokemonList from "./PokemonList";
 import { DEBUG_MODE } from "../app/constants";
 import { getPokemonStats } from "../app/use-pokemon-stats";
+import { isShared, saveNow } from "../state/session";
 
 const StartMenu = () => {
   const dispatch = useDispatch();
@@ -72,7 +73,9 @@ const StartMenu = () => {
                   preMessage: "Would you like to SAVE the game?",
                   postMessage: `${name} saved the game!`,
                   confirm: () => {
-                    dispatch(save());
+                    // Shared rooms autosave; this just flushes immediately.
+                    if (isShared()) saveNow();
+                    else dispatch(save());
                   },
                 })
               );
