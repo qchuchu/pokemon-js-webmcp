@@ -2,12 +2,11 @@ import { useDispatch, useSelector } from "react-redux";
 import { MapId } from "../maps/map-types";
 import useBadges from "./use-badges";
 import {
-  completeQuest,
   moveLeft,
+  payForQuest,
   selectCompletedQuests,
   selectPos,
   setPos,
-  takeMoney,
 } from "../state/gameSlice";
 import { setBlackScreen, showConfirmationMenu } from "../state/uiSlice";
 
@@ -72,8 +71,9 @@ const useQuests = () => {
             preMessage: "Would you like to come in?",
             postMessage: "Right $50! Thank you!",
             confirm: () => {
-              dispatch(completeQuest("pewter-museum-1f-paid"));
-              dispatch(takeMoney(50));
+              dispatch(
+                payForQuest({ id: "pewter-museum-1f-paid", cost: 50 })
+              );
             },
             cancel: () => {
               dispatch(setPos({ x: pos.x, y: pos.y + 1 }));

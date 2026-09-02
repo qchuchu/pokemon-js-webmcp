@@ -336,7 +336,20 @@ export const gameSlice = createSlice({
       state.collectedItems.push(id);
     },
     completeQuest: (state, action: PayloadAction<string>) => {
+      if (state.completedQuests.includes(action.payload)) return;
       state.completedQuests.push(action.payload);
+    },
+    // Every agent sharing the avatar is stood on the quest tile at once and
+    // each gets its own copy of the prompt, so the charge has to be tied to
+    // the completion rather than dispatched next to it: whoever confirms
+    // second must not pay again.
+    payForQuest: (
+      state,
+      action: PayloadAction<{ id: string; cost: number }>
+    ) => {
+      if (state.completedQuests.includes(action.payload.id)) return;
+      state.completedQuests.push(action.payload.id);
+      state.money -= action.payload.cost;
     },
     // Replaces the world wholesale. Used when an agent joins a room that is
     // already in progress and needs to catch up before its actions make sense.
@@ -381,6 +394,7 @@ export const {
   faintToTrainer,
   collectItem,
   completeQuest,
+  payForQuest,
   hydrate,
 } = gameSlice.actions;
 

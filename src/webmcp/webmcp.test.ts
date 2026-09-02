@@ -3,7 +3,12 @@
 import findPath, { adjacentTiles } from "./pathfinding";
 import { MapId } from "../maps/map-types";
 import { canWalk } from "../app/map-helper";
-import gameReducer, { hydrate, moveUp } from "../state/gameSlice";
+import gameReducer, {
+  completeQuest,
+  hydrate,
+  moveUp,
+  payForQuest,
+} from "../state/gameSlice";
 import { GameState } from "../state/state-types";
 import { ItemType } from "../app/item-types";
 import { pickDriver } from "../state/session";
@@ -47,6 +52,30 @@ describe("pathfinding", () => {
     const tiles = adjacentTiles({ x: 12, y: 11 }, map, []);
     expect(tiles.length).toBeGreaterThan(0);
     tiles.forEach((tile) => expect(canWalk(tile.x, tile.y, map, [])).toBe(true));
+  });
+});
+
+describe("quests under a shared avatar", () => {
+  const museum = { id: "pewter-museum-1f-paid", cost: 50 };
+
+  it("charges once however many agents confirm the same prompt", () => {
+    // Both agents stand on the tile and each gets its own copy of the prompt,
+    // so both can confirm. The second must be a no-op, not a second $50.
+    let state = gameReducer(undefined, { type: "@@init" });
+    const before = state.money;
+
+    state = gameReducer(state, payForQuest(museum));
+    state = gameReducer(state, payForQuest(museum));
+
+    expect(state.money).toBe(before - museum.cost);
+    expect(state.completedQuests.filter((q) => q === museum.id)).toHaveLength(1);
+  });
+
+  it("does not record a quest twice", () => {
+    let state = gameReducer(undefined, { type: "@@init" });
+    state = gameReducer(state, completeQuest("some-quest"));
+    state = gameReducer(state, completeQuest("some-quest"));
+    expect(state.completedQuests).toEqual(["some-quest"]);
   });
 });
 
