@@ -1,6 +1,6 @@
 import mapData from "../maps/map-data";
 import { MapId } from "../maps/map-types";
-import { canWalk } from "../app/map-helper";
+import { canWalk, isItem } from "../app/map-helper";
 import { Direction, PosType } from "../state/state-types";
 
 const STEPS: { direction: Direction; dx: number; dy: number }[] = [
@@ -11,6 +11,23 @@ const STEPS: { direction: Direction; dx: number; dy: number }[] = [
 ];
 
 const key = (x: number, y: number) => `${x},${y}`;
+
+/**
+ * canWalk treats an uncollected item as solid, but stepping onto it is exactly
+ * how the game picks it up. Allow it as a destination only, so intermediate
+ * tiles stay ones the reducers accept.
+ */
+const passable = (
+  x: number,
+  y: number,
+  mapId: MapId,
+  collectedItems: string[],
+  to: PosType
+) =>
+  canWalk(x, y, mapId, collectedItems) ||
+  (x === to.x &&
+    y === to.y &&
+    isItem(mapData[mapId].items, x, y, collectedItems, mapId));
 
 /**
  * Breadth-first search over the same walkability rules the reducers use, so a
@@ -44,7 +61,7 @@ const findPath = (
       if (next.x < 0 || next.y < 0) continue;
       if (next.x >= map.width || next.y >= map.height) continue;
       if (seen.has(key(next.x, next.y))) continue;
-      if (!canWalk(next.x, next.y, mapId, collectedItems)) continue;
+      if (!passable(next.x, next.y, mapId, collectedItems, to)) continue;
 
       seen.add(key(next.x, next.y));
       cameFrom.set(key(next.x, next.y), {

@@ -5,10 +5,15 @@ import { MapId } from "../maps/map-types";
 import { canWalk } from "../app/map-helper";
 import gameReducer, {
   completeQuest,
+  encounterPokemon,
+  encounterTrainer,
   hydrate,
   moveUp,
   payForQuest,
 } from "../state/gameSlice";
+import mapData from "../maps/map-data";
+import { store } from "../state/store";
+import { buildSnapshot } from "./snapshot";
 import { GameState } from "../state/state-types";
 import { ItemType } from "../app/item-types";
 import { pickDriver } from "../state/session";
@@ -140,5 +145,45 @@ describe("shared world", () => {
     // The middleware broadcasts on this prefix; ui actions must stay local
     // because that slice holds callbacks and per-agent cursor state.
     expect(moveUp().type.startsWith("game/")).toBe(true);
+  });
+});
+
+describe("agent-facing payloads", () => {
+  it("routes onto an item tile, which canWalk calls solid but stepping on picks up", () => {
+    const forest = MapId.ViridianForrest;
+    const pokeBall = { x: 1, y: 31 };
+    expect(canWalk(pokeBall.x, pokeBall.y, forest, [])).toBe(false);
+
+    const path = findPath({ x: 5, y: 31 }, pokeBall, forest, []);
+    expect(path).toEqual(["left", "left", "left", "left"]);
+  });
+
+  it("keeps routing around an item that is not the destination", () => {
+    const forest = MapId.ViridianForrest;
+    const path = findPath({ x: 5, y: 31 }, { x: 5, y: 30 }, forest, []);
+    expect(path).not.toContain(undefined);
+    expect(path).not.toBeNull();
+  });
+
+  it("never ships sprite data in the battle snapshot", () => {
+    const trainer = (mapData[MapId.ViridianForrest].trainers ?? [])[0];
+    expect(trainer.npc.portrait).toMatch(/^data:image|\.(png|jpg)/);
+
+    store.dispatch(encounterTrainer(trainer));
+    store.dispatch(
+      encounterPokemon({
+        id: trainer.pokemon[0].id,
+        level: trainer.pokemon[0].level,
+        hp: 10,
+        moves: [],
+      })
+    );
+    const battle = buildSnapshot(store.getState()).battle;
+    expect(battle?.kind).toBe("trainer");
+    expect(JSON.stringify(battle)).not.toContain("data:image");
+    expect(battle?.trainer).toEqual({
+      name: trainer.npc.name,
+      canBattle: trainer.npc.canBattle,
+    });
   });
 });

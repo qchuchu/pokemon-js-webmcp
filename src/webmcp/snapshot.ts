@@ -3,7 +3,15 @@ import { MapId, MapType } from "../maps/map-types";
 import { getMoveMetadata } from "../app/use-move-metadata";
 import { getPokemonStats } from "../app/use-pokemon-stats";
 import { getPokemonMetadata } from "../app/use-pokemon-metadata";
-import { canWalk, isExit, isGrass, isTrainer } from "../app/map-helper";
+import {
+  canWalk,
+  isExit,
+  isFence,
+  isGrass,
+  isItem,
+  isTrainer,
+  isWall,
+} from "../app/map-helper";
 import { RootState } from "../state/store";
 import { selectActiveMenu, selectFrozen, selectMenus } from "../state/uiSlice";
 import { Direction, PokemonInstance, PosType } from "../state/state-types";
@@ -97,7 +105,7 @@ const renderLocalMap = (state: RootState): string[] => {
  * The battle choreography is a numbered stage machine. Agents should not have
  * to learn the numbers, so name the phases that matter for deciding what to do.
  */
-const battlePhase = (stage: number): string => {
+export const battlePhase = (stage: number): string => {
   if (stage < 0) return "not-in-battle";
   if (stage <= 10 || (stage >= 34 && stage <= 41)) return "animating";
   if (stage === 11) return "choose-action";
@@ -115,6 +123,58 @@ const battlePhase = (stage: number): string => {
   if (stage >= 46 && stage <= 49) return "opponent-sending-out";
   if (stage >= 50 && stage <= 52) return "victory";
   return "animating";
+};
+
+/**
+ * The same doors, people and items the ASCII grid shows, but with absolute
+ * coordinates. Reading a glyph off the grid means counting rows and columns
+ * from localMapOrigin, which is easy to get wrong; these can be passed
+ * straight to walk_to or go_to_and_interact.
+ */
+const notableTiles = (state: RootState) => {
+  const { pos, map: mapId, collectedItems, defeatedTrainers } = state.game;
+  const map = mapData[mapId];
+  const items = uncollectedItem(map, mapId, collectedItems);
+  const found: { x: number; y: number; kind: string }[] = [];
+
+  for (let y = pos.y - VIEW_RADIUS; y <= pos.y + VIEW_RADIUS; y++) {
+    for (let x = pos.x - VIEW_RADIUS; x <= pos.x + VIEW_RADIUS; x++) {
+      if (x < 0 || y < 0 || x >= map.width || y >= map.height) continue;
+      if (x === pos.x && y === pos.y) continue;
+      if (items.some((item) => item.pos.x === x && item.pos.y === y)) {
+        found.push({ x, y, kind: "item" });
+      } else if (isTrainer(map.trainers, x, y)) {
+        const id = `${mapId}-${x}-${y}`;
+        found.push({
+          x,
+          y,
+          kind: defeatedTrainers.includes(id) ? "trainer-beaten" : "trainer",
+        });
+      } else if (isMapChange(map, x, y)) {
+        found.push({ x, y, kind: "door" });
+      } else if (hasText(map, x, y)) {
+        found.push({ x, y, kind: "sign-or-npc" });
+      }
+    }
+  }
+  return found;
+};
+
+/** Why a tile cannot be stood on, for pathfinding failures. */
+export const describeTile = (
+  x: number,
+  y: number,
+  mapId: MapId,
+  collectedItems: string[]
+): string => {
+  const map = mapData[mapId];
+  if (x < 0 || y < 0 || x >= map.width || y >= map.height) return "off-map";
+  if (isTrainer(map.trainers, x, y)) return "trainer (stand next to it instead)";
+  if (isItem(map.items, x, y, collectedItems, mapId)) return "item on the ground";
+  if (hasText(map, x, y)) return "sign or NPC (stand next to it instead)";
+  if (isWall(map.walls, x, y)) return "wall";
+  if (isFence(map.fences, x, y)) return "fence";
+  return "walkable, but no route reaches it from here";
 };
 
 export const MAP_LEGEND =
@@ -217,7 +277,12 @@ export const buildSnapshot = (state: RootState) => {
             state.battle.trainerIntroIndex >= 0
               ? game.trainerEncounter?.intro[state.battle.trainerIntroIndex]
               : null,
-          trainer: game.trainerEncounter?.npc,
+          // Never the whole npc: it carries a portrait and twelve walk sprites
+          // as inlined base64, which would ship on every read of the battle.
+          trainer: game.trainerEncounter && {
+            name: game.trainerEncounter.npc.name,
+            canBattle: game.trainerEncounter.npc.canBattle,
+          },
           opponent: {
             species: getPokemonMetadata(encounter.id).name,
             level: encounter.level,
@@ -240,6 +305,7 @@ export const buildSnapshot = (state: RootState) => {
       pc: map.pc,
       localMap: renderLocalMap(state),
       localMapLegend: MAP_LEGEND,
+      notable: notableTiles(state),
       localMapOrigin: {
         x: game.pos.x - VIEW_RADIUS,
         y: game.pos.y - VIEW_RADIUS,

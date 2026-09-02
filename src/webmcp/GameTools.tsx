@@ -10,11 +10,18 @@ import {
   moveRight,
   moveUp,
   setMoving,
+  swapPokemonPositions,
 } from "../state/gameSlice";
 import { selectActiveMenu, selectFrozen } from "../state/uiSlice";
 import { Direction, PosType } from "../state/state-types";
 import findPath, { adjacentTiles } from "./pathfinding";
-import { buildSnapshot, facingOffset, MAP_LEGEND } from "./snapshot";
+import {
+  battlePhase,
+  buildSnapshot,
+  describeTile,
+  facingOffset,
+  MAP_LEGEND,
+} from "./snapshot";
 import {
   AGENT_ID,
   connectSession,
@@ -53,6 +60,20 @@ const settle = (ms = MOVE_SPEED) =>
 const press = async (event: Event, ms?: number) => {
   emitter.emit(event);
   await settle(ms ?? 60);
+};
+
+/**
+ * Battle choreography runs on its own timers and ignores A while it plays, so
+ * a burst of presses on a fixed interval mostly lands on deaf frames. Wait for
+ * a phase that actually wants input before spending the press.
+ */
+const awaitInput = async (budget = 4000) => {
+  for (let waited = 0; waited < budget; waited += 60) {
+    const state = store.getState();
+    if (!state.game.pokemonEncounter) return;
+    if (battlePhase(state.battle.stage) !== "animating") return;
+    await settle(60);
+  }
 };
 
 const summary = () => {
@@ -136,11 +157,67 @@ const GameTools = () => {
       "Read everything currently true of the shared game: position, map, an " +
       "ASCII view of the surrounding tiles, the party and their moves, the " +
       "bag, and whatever is on screen (dialogue, menus, battle). Call this " +
-      "before acting and after anything unexpected. " +
+      "before acting and after anything unexpected. While simply walking " +
+      "around, prefer look, which returns the map without the party and bag. " +
       `Local map legend: ${MAP_LEGEND}`,
     input: z.object({}),
     annotations: { readOnlyHint: true },
     handler: async () => ok(buildSnapshot(store.getState())),
+  });
+
+  useMcpTool({
+    name: "look",
+    title: "Look around",
+    description:
+      "Just the surroundings: where you are, the ASCII view, and the doors, " +
+      "people and items in it with absolute coordinates you can pass to " +
+      "walk_to. Use this while navigating; get_game_state also returns the " +
+      "party, the bag and the battle, which rarely change between steps. " +
+      `Legend: ${MAP_LEGEND}`,
+    input: z.object({}),
+    annotations: { readOnlyHint: true },
+    handler: async () => {
+      const snapshot = buildSnapshot(store.getState());
+      return ok({
+        pos: snapshot.player.pos,
+        map: snapshot.player.map,
+        mapName: snapshot.player.mapName,
+        mapSize: snapshot.player.mapSize,
+        facing: snapshot.player.facing,
+        ...snapshot.surroundings,
+      });
+    },
+  });
+
+  useMcpTool({
+    name: "swap_party_slots",
+    title: "Reorder the party",
+    description:
+      "Swap two party slots. Slot 0 leads, so this is how you choose who is " +
+      "sent out first without burning a turn switching mid-battle.",
+    input: z.object({
+      a: z.number().int().min(0).max(5),
+      b: z.number().int().min(0).max(5),
+    }),
+    handler: async ({ a, b }) => {
+      const party = store.getState().game.pokemon;
+      if (a >= party.length || b >= party.length) {
+        return fail(`Party has ${party.length} Pokemon; slots are 0..${party.length - 1}.`);
+      }
+      if (a === b) return fail("Those are the same slot.");
+
+      store.dispatch(swapPokemonPositions([a, b]));
+      await settle(60);
+      return ok({
+        party: buildSnapshot(store.getState()).party.map((pokemon) => ({
+          slot: pokemon.slot,
+          species: pokemon.species,
+          level: pokemon.level,
+          hp: pokemon.hp,
+          maxHp: pokemon.maxHp,
+        })),
+      });
+    },
   });
 
   useMcpTool({
@@ -164,8 +241,11 @@ const GameTools = () => {
       const { pos, map, collectedItems } = store.getState().game;
       const path = findPath(pos, { x, y }, map, collectedItems);
       if (!path) {
+        const surroundings = buildSnapshot(store.getState()).surroundings;
         return fail(`No walkable path from (${pos.x},${pos.y}) to (${x},${y}).`, {
-          localMap: buildSnapshot(store.getState()).surroundings.localMap,
+          because: describeTile(x, y, map, collectedItems),
+          localMap: surroundings.localMap,
+          notable: surroundings.notable,
         });
       }
 
@@ -206,7 +286,10 @@ const GameTools = () => {
       times: z.number().int().min(1).max(20).default(1),
     }),
     handler: async ({ times }) => {
-      for (let i = 0; i < times; i++) await press(Event.A, 140);
+      for (let i = 0; i < times; i++) {
+        await awaitInput();
+        await press(Event.A, 140);
+      }
       return ok(summary());
     },
   });
