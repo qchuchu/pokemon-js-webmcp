@@ -42,6 +42,9 @@ let peers: Peer[] = [];
 let log: LogEntry[] = [];
 let label = AGENT_ID;
 let hydrated = false;
+// send() silently falls back to REST until the socket has joined, which would
+// turn every walk step into an HTTP request. Nothing goes out before this.
+let joined = false;
 
 export const isShared = () => !!url && !!anonKey;
 
@@ -55,13 +58,19 @@ const appendLog = (entry: LogEntry) => {
 
 export const setAgentLabel = (next: string) => {
   label = next;
-  channel?.track({ agentId: AGENT_ID, label, joinedAt: new Date().toISOString() });
+  if (joined) {
+    channel?.track({
+      agentId: AGENT_ID,
+      label,
+      joinedAt: new Date().toISOString(),
+    });
+  }
 };
 
 export const say = (text: string) => {
   const entry: LogEntry = { agentId: label, text, at: new Date().toISOString() };
   appendLog(entry);
-  channel?.send({ type: "broadcast", event: "note", payload: entry });
+  if (joined) channel?.send({ type: "broadcast", event: "note", payload: entry });
 };
 
 export const sharedActionMiddleware: Middleware = () => (next) => (action) => {
@@ -69,6 +78,7 @@ export const sharedActionMiddleware: Middleware = () => (next) => (action) => {
   const typed = action as AnyAction;
   if (
     channel &&
+    joined &&
     !applyingRemote &&
     typeof typed.type === "string" &&
     typed.type.startsWith(SHARED_PREFIX)
@@ -88,7 +98,15 @@ export const connectSession = (
 ) => {
   if (!isShared()) return () => {};
 
-  const client = createClient(url as string, anonKey as string);
+  // No auth is used, and persisting a session would make every tab in this
+  // browser share one storage key.
+  const client = createClient(url as string, anonKey as string, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      storageKey: `pokemon-${AGENT_ID}`,
+    },
+  });
   channel = client.channel(`pokemon:${ROOM}`, {
     config: { broadcast: { self: false }, presence: { key: AGENT_ID } },
   });
@@ -137,6 +155,7 @@ export const connectSession = (
 
   channel.subscribe((status) => {
     if (status !== "SUBSCRIBED") return;
+    joined = true;
     channel?.track({
       agentId: AGENT_ID,
       label,
@@ -153,5 +172,6 @@ export const connectSession = (
     channel?.unsubscribe();
     channel = null;
     hydrated = false;
+    joined = false;
   };
 };
