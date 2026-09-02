@@ -11,7 +11,7 @@ import {
   selectPos,
   selectTrainerEncounter,
 } from "../state/gameSlice";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   directionModifier,
   isTrainer,
@@ -22,6 +22,11 @@ import useEvent from "../app/use-event";
 import { Event } from "../app/emitter";
 import getPokemonEncounter from "../app/pokemon-encounter-helper";
 import { showText } from "../state/uiSlice";
+import {
+  selectTrainerIntroIndex,
+  setTrainerIntroIndex,
+} from "../state/battleSlice";
+import useIsDriver from "../state/use-is-driver";
 
 const StyledTrainerEncounter = styled.div`
   position: absolute;
@@ -46,12 +51,18 @@ const TrainerEncounter = () => {
   const direction = useSelector(selectDirection);
   const mapId = useSelector(selectMapId);
 
-  const [introIndex, setIntroIndex] = useState(-1);
+  // Shared, so the trainer's intro reads the same for every agent watching.
+  const introIndex = useSelector(selectTrainerIntroIndex);
+  const setIntroIndex = (value: number) =>
+    dispatch(setTrainerIntroIndex(value));
+  const driving = useIsDriver();
 
   const { trainers, walls, fences } = map;
 
   useEffect(() => {
     if (!trainers) return;
+    // Driver only: being spotted fires on every tab from the same position.
+    if (!driving) return;
 
     const encounter_ = isTrainerEncounter(
       trainers,
@@ -67,7 +78,8 @@ const TrainerEncounter = () => {
     setTimeout(() => {
       setIntroIndex(0);
     }, 500);
-  }, [trainers, walls, fences, pos, dispatch, defeatedTrainers, mapId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trainers, walls, fences, pos, dispatch, defeatedTrainers, mapId, driving]);
 
   useEvent(Event.A, () => {
     const facingPos = directionModifier(direction);

@@ -1,6 +1,7 @@
 import { createClient, RealtimeChannel } from "@supabase/supabase-js";
 import { AnyAction, Middleware } from "@reduxjs/toolkit";
 import { GameState } from "./state-types";
+import { BattleState } from "./battleSlice";
 
 const url = process.env.REACT_APP_SUPABASE_URL;
 const anonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
@@ -28,11 +29,12 @@ export interface LogEntry {
  * One shared world, one shared avatar: every tab reduces the same stream of
  * game actions, so whoever is connected is driving the same trainer.
  *
- * Only the `game` slice travels. It is plain serialisable data (position, map,
- * party, bag, flags). The `ui` slice holds live callbacks and per-view cursor
- * state, so each agent keeps its own menus and its own place in a dialogue.
+ * The `game` and `battle` slices travel. Both are plain serialisable data
+ * (position, map, party, bag, flags, and the battle state machine). The `ui`
+ * slice holds live callbacks and per-view cursor state, so each agent keeps its
+ * own menus and its own place in a dialogue.
  */
-const SHARED_PREFIX = "game/";
+const SHARED_PREFIXES = ["game/", "battle/"];
 
 // Set while applying a remote action, so we never echo it back to the room.
 let applyingRemote = false;
@@ -63,6 +65,32 @@ export const subscribePeers = (listener: () => void) => {
 
 // Stable reference between presence syncs, which useSyncExternalStore requires.
 export const listPeers = (): Peer[] => peers;
+
+/**
+ * Exactly one tab drives the world's emergent logic: encounter rolls, battle
+ * choreography, map transitions. Everyone shares one avatar, so if every tab
+ * ran those timers each would roll its own wild Pokemon and each would
+ * broadcast its own map change.
+ *
+ * The oldest peer wins, tie-broken on id, so every tab derives the same answer
+ * from the same presence state without any negotiation. When the driver leaves,
+ * presence syncs and the next one takes over on its own.
+ */
+export const pickDriver = (candidates: Peer[]): string | null => {
+  if (candidates.length === 0) return null;
+  const [first] = [...candidates].sort((a, b) =>
+    a.joinedAt === b.joinedAt
+      ? a.agentId.localeCompare(b.agentId)
+      : a.joinedAt.localeCompare(b.joinedAt)
+  );
+  return first.agentId;
+};
+
+export const isDriver = (): boolean => {
+  // Nobody to coordinate with, so drive everything.
+  if (!isShared()) return true;
+  return pickDriver(peers) === AGENT_ID;
+};
 
 export const readLog = (limit = 20): LogEntry[] => log.slice(-limit);
 
@@ -95,7 +123,7 @@ export const sharedActionMiddleware: Middleware = () => (next) => (action) => {
     joined &&
     !applyingRemote &&
     typeof typed.type === "string" &&
-    typed.type.startsWith(SHARED_PREFIX)
+    SHARED_PREFIXES.some((prefix) => typed.type.startsWith(prefix))
   ) {
     channel.send({
       type: "broadcast",
@@ -106,9 +134,14 @@ export const sharedActionMiddleware: Middleware = () => (next) => (action) => {
   return result;
 };
 
+export interface SharedState {
+  game: GameState;
+  battle: BattleState;
+}
+
 export const connectSession = (
   dispatch: (action: AnyAction) => void,
-  getGameState: () => GameState
+  getSharedState: () => SharedState
 ) => {
   if (!isShared()) return () => {};
 
@@ -146,7 +179,7 @@ export const connectSession = (
     channel?.send({
       type: "broadcast",
       event: "state",
-      payload: { from: AGENT_ID, to: payload.from, game: getGameState() },
+      payload: { from: AGENT_ID, to: payload.from, state: getSharedState() },
     });
   });
 
@@ -155,7 +188,8 @@ export const connectSession = (
     hydrated = true;
     applyingRemote = true;
     try {
-      dispatch({ type: "game/hydrate", payload: payload.game });
+      dispatch({ type: "game/hydrate", payload: payload.state.game });
+      dispatch({ type: "battle/hydrateBattle", payload: payload.state.battle });
     } finally {
       applyingRemote = false;
     }

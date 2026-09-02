@@ -65,8 +65,16 @@ Open the game in one tab per agent, optionally with `?room=<name>` to run
 several worlds at once. With the keys unset everything still works, the tab is
 just not synced to anyone.
 
-Only the `game` slice travels between tabs. Menus and dialogue position are
-per-agent, so two agents can be reading different screens of the same world.
+The `game` and `battle` slices travel between tabs, so battles are shared too:
+every agent watches the same fight and any of them can take the turn. Menus and
+dialogue position stay per-agent, so two agents can be reading different screens
+of the same world.
+
+One tab is elected **driver** (the oldest in the room) and is the only one that
+runs the world's emergent logic - wild encounter rolls, battle choreography
+timers, map transitions. Without that, every tab would roll its own Pokemon and
+broadcast its own map change. The election is derived from presence, so it needs
+no coordination and hands over on its own when the driver leaves.
 
 ## Getting Started
 

@@ -6,6 +6,7 @@ import { DEBUG_MODE } from "../app/constants";
 import { isGrass } from "../app/map-helper";
 import { PokemonEncounterType } from "../state/state-types";
 import getPokemonEncounter from "../app/pokemon-encounter-helper";
+import useIsDriver from "../state/use-is-driver";
 
 const shouldEncounter = (rate: number) => {
   const random = Math.random() * 255;
@@ -40,9 +41,13 @@ const EncounterHandler = () => {
   const dispatch = useDispatch();
   const pos = useSelector(selectPos);
   const map = useSelector(selectMap);
+  const driving = useIsDriver();
 
   useEffect(() => {
     if (!map.encounters || DEBUG_MODE) return;
+    // Driver only: every tab sees the same step onto the same grass, and each
+    // would roll its own wild Pokemon.
+    if (!driving) return;
 
     // Handling walk encounters
     const isWalk = map.cave ? true : isGrass(map.grass, pos.x, pos.y);
@@ -55,7 +60,7 @@ const EncounterHandler = () => {
         }
       }
     }
-  }, [pos, map.grass, map.encounters, dispatch, map.cave]);
+  }, [pos, map.grass, map.encounters, dispatch, map.cave, driving]);
 
   return null;
 };

@@ -120,7 +120,10 @@ const GameTools = () => {
     () =>
       connectSession(
         (action) => store.dispatch(action),
-        () => store.getState().game
+        () => {
+          const state = store.getState();
+          return { game: state.game, battle: state.battle };
+        }
       ),
     []
   );

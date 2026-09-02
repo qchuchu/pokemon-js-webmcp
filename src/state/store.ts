@@ -1,12 +1,14 @@
 import { configureStore, ThunkAction, Action } from "@reduxjs/toolkit";
 import gameReducer from "./gameSlice";
 import uiReducer from "./uiSlice";
+import battleReducer from "./battleSlice";
 import { sharedActionMiddleware } from "./session";
 
 export const store = configureStore({
   reducer: {
     game: gameReducer,
     ui: uiReducer,
+    battle: battleReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

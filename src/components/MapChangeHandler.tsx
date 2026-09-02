@@ -11,6 +11,7 @@ import { useEffect } from "react";
 import emitter, { Event } from "../app/emitter";
 import { isExit } from "../app/map-helper";
 import { selectBlackScreen, setBlackScreen } from "../state/uiSlice";
+import useIsDriver from "../state/use-is-driver";
 
 interface OverlayProps {
   $show: boolean;
@@ -33,8 +34,12 @@ const MapChangeHandler = () => {
   const pos = useSelector(selectPos);
   const map = useSelector(selectMap);
   const darkScreen = useSelector(selectBlackScreen);
+  const driving = useIsDriver();
 
   useEffect(() => {
+    // Driver only: exitMap steps back through the map stack, so running it once
+    // per tab would exit several maps deep on a single doorway.
+    if (!driving) return;
     const nextMap = map.maps[pos.y] ? map.maps[pos.y][pos.x] : null;
     const exit = isExit(map.exits, pos.x, pos.y);
     const teleport =
@@ -63,7 +68,7 @@ const MapChangeHandler = () => {
     } else if (teleport) {
       transition(() => dispatch(setMapWithPos(teleport)));
     }
-  }, [pos, map.maps, dispatch, map.exits, darkScreen, map.teleports]);
+  }, [pos, map.maps, dispatch, map.exits, darkScreen, map.teleports, driving]);
 
   return <Overlay $show={darkScreen} />;
 };

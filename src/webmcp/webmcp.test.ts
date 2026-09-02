@@ -6,6 +6,7 @@ import { canWalk } from "../app/map-helper";
 import gameReducer, { hydrate, moveUp } from "../state/gameSlice";
 import { GameState } from "../state/state-types";
 import { ItemType } from "../app/item-types";
+import { pickDriver } from "../state/session";
 
 describe("module graph", () => {
   it("resolves ItemType when the map layer is loaded first", () => {
@@ -46,6 +47,47 @@ describe("pathfinding", () => {
     const tiles = adjacentTiles({ x: 12, y: 11 }, map, []);
     expect(tiles.length).toBeGreaterThan(0);
     tiles.forEach((tile) => expect(canWalk(tile.x, tile.y, map, [])).toBe(true));
+  });
+});
+
+describe("driver election", () => {
+  const peer = (agentId: string, joinedAt: string) => ({
+    agentId,
+    joinedAt,
+    label: agentId,
+  });
+
+  it("every tab picks the same driver without negotiating", () => {
+    const room = [
+      peer("c", "2026-01-01T00:00:02Z"),
+      peer("a", "2026-01-01T00:00:01Z"),
+      peer("b", "2026-01-01T00:00:03Z"),
+    ];
+    // Same answer regardless of the order presence happens to report peers in.
+    expect(pickDriver(room)).toBe("a");
+    expect(pickDriver([...room].reverse())).toBe("a");
+  });
+
+  it("breaks a tie on id so simultaneous joins still agree", () => {
+    const sameInstant = [
+      peer("z", "2026-01-01T00:00:00Z"),
+      peer("m", "2026-01-01T00:00:00Z"),
+    ];
+    expect(pickDriver(sameInstant)).toBe("m");
+    expect(pickDriver([...sameInstant].reverse())).toBe("m");
+  });
+
+  it("hands over to the next oldest when the driver leaves", () => {
+    const room = [
+      peer("a", "2026-01-01T00:00:01Z"),
+      peer("b", "2026-01-01T00:00:02Z"),
+    ];
+    expect(pickDriver(room)).toBe("a");
+    expect(pickDriver(room.filter((p) => p.agentId !== "a"))).toBe("b");
+  });
+
+  it("has no driver before presence lands, so nothing runs twice", () => {
+    expect(pickDriver([])).toBeNull();
   });
 });
 

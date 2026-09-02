@@ -27,7 +27,7 @@ import HealthBar from "./HealthBar";
 import usePokemonStats from "../app/use-pokemon-stats";
 
 import corner from "../assets/ui/corner.png";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import useEvent from "../app/use-event";
 import { Event } from "../app/emitter";
 
@@ -64,6 +64,23 @@ import catchesPokemon from "../app/pokeball-helper";
 import { PokemonEncounterType, PokemonInstance } from "../state/state-types";
 import getPokemonEncounter from "../app/pokemon-encounter-helper";
 import PixelImage from "../styles/PixelImage";
+import {
+  selectAlertText,
+  selectClickableNotice,
+  selectInvolvedPokemon,
+  selectOutroIndex,
+  selectProcessingInvolvedPokemon,
+  selectStage,
+  selectTrainerPokemonIndex,
+  setAlertText as setAlertTextAction,
+  setClickableNotice as setClickableNoticeAction,
+  setInvolvedPokemon as setInvolvedPokemonAction,
+  setOutroIndex as setOutroIndexAction,
+  setProcessingInvolvedPokemon as setProcessingInvolvedPokemonAction,
+  setStage as setStageAction,
+  setTrainerPokemonIndex as setTrainerPokemonIndexAction,
+} from "../state/battleSlice";
+import useIsDriver from "../state/use-is-driver";
 
 const MOVEMENT_ANIMATION = 1300;
 const FRAME_DURATION = 100;
@@ -603,18 +620,38 @@ const PokemonEncounter = () => {
   // 50 = defeated trainer
   // 51 = battle outro
   // 52 = receiving money
-  const [stage, setStage] = useState(-1);
-  const [trainerPokemonIndex, setTrainerPokemonIndex] = useState(0);
-  const [outroIndex, setOutroIndex] = useState(0);
-  const [involvedPokemon, setInvolvedPokemon] = useState<number[]>([0]);
-  const [processingInvolvedPokemon, setProcessingInvolvedPokemon] = useState(0);
+  // The battle state machine lives in Redux rather than useState so that every
+  // agent in the room watches the same fight. The setters below keep the names
+  // the choreography already used, so the sequencing code is unchanged.
+  const stage = useSelector(selectStage);
+  const trainerPokemonIndex = useSelector(selectTrainerPokemonIndex);
+  const outroIndex = useSelector(selectOutroIndex);
+  const involvedPokemon = useSelector(selectInvolvedPokemon);
+  const processingInvolvedPokemon = useSelector(
+    selectProcessingInvolvedPokemon
+  );
+
+  const setStage = (value: number) => dispatch(setStageAction(value));
+  const setTrainerPokemonIndex = (value: number) =>
+    dispatch(setTrainerPokemonIndexAction(value));
+  const setOutroIndex = (value: number) => dispatch(setOutroIndexAction(value));
+  const setInvolvedPokemon = (value: number[]) =>
+    dispatch(setInvolvedPokemonAction(value));
+  const setProcessingInvolvedPokemon = (value: number) =>
+    dispatch(setProcessingInvolvedPokemonAction(value));
   const processingPokemon =
     pokemon[involvedPokemon[processingInvolvedPokemon] || 0];
   const processingMetadata = usePokemonMetadata(processingPokemon?.id || null);
   const pokemonEvolving = useSelector(selectEvolution);
+  const driving = useIsDriver();
 
-  const [alertText, setAlertText] = useState<string | null>(null);
-  const [clickableNotice, setClickableNotice] = useState<string | null>(null);
+  const alertText = useSelector(selectAlertText);
+  const clickableNotice = useSelector(selectClickableNotice);
+
+  const setAlertText = (value: string | null) =>
+    dispatch(setAlertTextAction(value));
+  const setClickableNotice = (value: string | null) =>
+    dispatch(setClickableNoticeAction(value));
 
   const isInBattle = !!enemy && !!active && !!enemyMetadata && !!activeMetadata;
 
@@ -724,6 +761,10 @@ const PokemonEncounter = () => {
   };
 
   useEffect(() => {
+    // Driver only: this fires on every tab the moment an encounter appears in
+    // the shared state, and each one would run its own intro timers.
+    if (!driving) return;
+
     if (isInBattle) {
       dispatch(resetActivePokemon());
       setStage(0);
@@ -738,7 +779,8 @@ const PokemonEncounter = () => {
     if (!isInBattle) {
       setStage(-1);
     }
-  }, [isInBattle, dispatch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInBattle, dispatch, driving]);
 
   const throwPokeball = () => {
     setTimeout(() => {

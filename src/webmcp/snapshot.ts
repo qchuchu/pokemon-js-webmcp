@@ -93,6 +93,30 @@ const renderLocalMap = (state: RootState): string[] => {
   return rows;
 };
 
+/**
+ * The battle choreography is a numbered stage machine. Agents should not have
+ * to learn the numbers, so name the phases that matter for deciding what to do.
+ */
+const battlePhase = (stage: number): string => {
+  if (stage < 0) return "not-in-battle";
+  if (stage <= 10 || (stage >= 34 && stage <= 41)) return "animating";
+  if (stage === 11) return "choose-action";
+  if (stage === 12) return "fled";
+  if (stage === 13) return "choose-pokemon";
+  if (stage === 14) return "choose-move";
+  if (stage >= 15 && stage <= 19) return "attacking";
+  if (stage === 20) return "opponent-fainted";
+  if (stage === 21 || stage === 22) return "gaining-experience";
+  if (stage === 24) return "your-pokemon-fainted";
+  if (stage === 25) return "must-send-out-pokemon";
+  if (stage >= 26 && stage <= 28) return "blacked-out";
+  if (stage >= 29 && stage <= 33) return "learning-move";
+  if (stage >= 42 && stage <= 45) return "throwing-pokeball";
+  if (stage >= 46 && stage <= 49) return "opponent-sending-out";
+  if (stage >= 50 && stage <= 52) return "victory";
+  return "animating";
+};
+
 export const MAP_LEGEND =
   "@ you | . walkable | # blocked | ~ tall grass (wild encounters) | " +
   "D door/exit to another map | S readable sign or NPC to talk to | " +
@@ -184,6 +208,15 @@ export const buildSnapshot = (state: RootState) => {
     battle: encounter
       ? {
           kind: game.trainerEncounter ? "trainer" : "wild",
+          // Advance with interact(); when the phase asks for a choice, the menu
+          // is in screen.activeMenu and select_menu_item drives it.
+          phase: battlePhase(state.battle.stage),
+          stage: state.battle.stage,
+          message: state.battle.clickableNotice ?? state.battle.alertText,
+          trainerIntro:
+            state.battle.trainerIntroIndex >= 0
+              ? game.trainerEncounter?.intro[state.battle.trainerIntroIndex]
+              : null,
           trainer: game.trainerEncounter?.npc,
           opponent: {
             species: getPokemonMetadata(encounter.id).name,
