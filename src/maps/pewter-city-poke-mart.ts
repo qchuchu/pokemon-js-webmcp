@@ -2,7 +2,7 @@ import image from "../assets/map/pewter-city-poke-mart.png";
 import { MapId, MapType } from "./map-types";
 
 import music from "../assets/music/maps/pokemon-center.mp3";
-import { ItemType } from "../app/use-item-data";
+import { ItemType } from "../app/item-types";
 
 const pewterCityPokeMart: MapType = {
   name: "Pewter City Poke Mart",

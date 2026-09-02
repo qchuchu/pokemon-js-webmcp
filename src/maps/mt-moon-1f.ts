@@ -1,5 +1,5 @@
 import { bugCatcher, hiker, lass, superNerd, youngster } from "../app/npcs";
-import { ItemType } from "../app/use-item-data";
+import { ItemType } from "../app/item-types";
 import image from "../assets/map/mt-moon-1f.png";
 import music from "../assets/music/maps/mt-moon.mp3";
 import { Direction } from "../state/state-types";

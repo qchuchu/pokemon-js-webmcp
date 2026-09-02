@@ -1,5 +1,5 @@
 import { NpcType } from "../app/npcs";
-import { ItemType } from "../app/use-item-data";
+import { ItemType } from "../app/item-types";
 import { Direction, PosType } from "../state/state-types";
 
 export enum MapId {

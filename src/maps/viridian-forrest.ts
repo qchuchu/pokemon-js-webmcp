@@ -1,5 +1,5 @@
 import { bugCatcher } from "../app/npcs";
-import { ItemType } from "../app/use-item-data";
+import { ItemType } from "../app/item-types";
 import image from "../assets/map/viridian-forrest.png";
 import { Direction } from "../state/state-types";
 import getEncounterData from "./get-location-data";

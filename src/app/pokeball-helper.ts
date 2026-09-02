@@ -1,5 +1,5 @@
 import { PokemonEncounterType } from "../state/state-types";
-import { ItemType } from "./use-item-data";
+import { ItemType } from "./item-types";
 import { getPokemonMetadata } from "./use-pokemon-metadata";
 import { getPokemonStats } from "./use-pokemon-stats";
 

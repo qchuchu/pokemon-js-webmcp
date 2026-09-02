@@ -1,4 +1,4 @@
-import { ItemType } from "../app/use-item-data";
+import { ItemType } from "../app/item-types";
 import { MapId, TrainerType } from "../maps/map-types";
 
 export interface InventoryItemType {

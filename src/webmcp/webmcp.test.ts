@@ -1,11 +1,22 @@
-// gameSlice first: it and use-item-data import each other through map-data, and
-// the ItemType enum is only defined by the time gameSlice's body runs if
-// gameSlice is what enters the cycle. The app happens to load it in this order.
-import gameReducer, { hydrate, moveUp } from "../state/gameSlice";
+// Import order matters here: pathfinding pulls in the map layer, which used to
+// enter a gameSlice <-> use-item-data cycle and leave ItemType undefined.
 import findPath, { adjacentTiles } from "./pathfinding";
 import { MapId } from "../maps/map-types";
 import { canWalk } from "../app/map-helper";
+import gameReducer, { hydrate, moveUp } from "../state/gameSlice";
 import { GameState } from "../state/state-types";
+import { ItemType } from "../app/item-types";
+
+describe("module graph", () => {
+  it("resolves ItemType when the map layer is loaded first", () => {
+    // Regression: the enum used to live in the useItemData hook, which imports
+    // the slices that the map data imports back.
+    expect(ItemType.MaxPotion).toBe("max-potion");
+    expect(gameReducer(undefined, { type: "@@init" }).inventory[0].item).toBe(
+      ItemType.MaxPotion
+    );
+  });
+});
 
 describe("pathfinding", () => {
   const map = MapId.PalletTown;

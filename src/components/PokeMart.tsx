@@ -21,7 +21,8 @@ import {
 } from "../state/uiSlice";
 import Frame from "./Frame";
 import Menu from "./Menu";
-import useItemData, { ItemType } from "../app/use-item-data";
+import useItemData from "../app/use-item-data";
+import { ItemType } from "../app/item-types";
 import { InventoryItemType } from "../state/state-types";
 
 const StyledPokeMart = styled.div`

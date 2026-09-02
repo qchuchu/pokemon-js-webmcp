@@ -5,7 +5,7 @@ import palletTown from "../maps/pallet-town";
 import { getPokemonStats } from "../app/use-pokemon-stats";
 import mapData from "../maps/map-data";
 import { getMoveMetadata } from "../app/use-move-metadata";
-import { ItemType } from "../app/use-item-data";
+import { ItemType } from "../app/item-types";
 import { canWalk, isFence, isItem, isTrainer, isWall } from "../app/map-helper";
 import {
   Direction,

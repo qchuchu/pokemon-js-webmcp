@@ -1,6 +1,6 @@
 import { PayloadAction, createSlice } from "@reduxjs/toolkit";
 import { RootState } from "./store";
-import { ItemType } from "../app/use-item-data";
+import { ItemType } from "../app/item-types";
 import { Direction } from "./state-types";
 
 interface TextThenActionType {

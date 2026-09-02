@@ -1,5 +1,5 @@
 import { brock, jrTrainerMale } from "../app/npcs";
-import { ItemType } from "../app/use-item-data";
+import { ItemType } from "../app/item-types";
 import image from "../assets/map/pewter-city-gym.png";
 import music from "../assets/music/maps/pokemon-gym.mp3";
 import { Direction } from "../state/state-types";
