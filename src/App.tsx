@@ -1,5 +1,6 @@
 import styled from "styled-components";
 import { WebMCPProvider } from "webmcp-react";
+import AgentBadge from "./webmcp/AgentBadge";
 import Gameboy from "./components/Gameboy";
 import Game from "./components/Game";
 
@@ -25,6 +26,7 @@ const StyledApp = styled.div`
 const App = () => {
   return (
     <WebMCPProvider name="pokemon-js" version="1.0.0">
+      <AgentBadge />
       <StyledApp>
         <Gameboy>
           <Game />

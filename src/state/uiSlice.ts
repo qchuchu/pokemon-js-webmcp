@@ -61,9 +61,12 @@ const initialState: UiState = {
   startMenu: false,
   itemsMenu: false,
   playerMenu: false,
-  titleMenu: true,
-  loadMenu: true,
-  gameboyMenu: true,
+  // An agent joining a room wants to land in the running game, not sit on a
+  // boot sequence built for someone holding a Game Boy. The screens still
+  // exist and can be shown again by dispatching their show actions.
+  titleMenu: false,
+  loadMenu: false,
+  gameboyMenu: false,
   actionOnPokemon: null,
   pokeballThrowing: null,
   pokemonCenterMenu: false,

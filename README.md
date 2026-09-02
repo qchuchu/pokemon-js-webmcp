@@ -104,6 +104,10 @@ There are none. The keyboard handler has been removed: the game is driven by
 agents through the WebMCP tools above. The on-screen Game Boy buttons still
 work if you want to take over or watch along.
 
+Opening the page drops you straight into the running world - there is no boot
+or title sequence to click through. A badge in the top right shows how many
+agents are currently connected to the room.
+
 ## Project Structure
 
 - `/src/components`: React components for game UI

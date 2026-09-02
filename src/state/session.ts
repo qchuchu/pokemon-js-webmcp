@@ -48,6 +48,20 @@ let joined = false;
 
 export const isShared = () => !!url && !!anonKey;
 
+// Plain subscription rather than Redux: presence is per-tab knowledge about
+// the room, not part of the world every agent shares.
+const listeners = new Set<() => void>();
+
+const notify = () => listeners.forEach((listener) => listener());
+
+export const subscribePeers = (listener: () => void) => {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+};
+
+// Stable reference between presence syncs, which useSyncExternalStore requires.
 export const listPeers = (): Peer[] => peers;
 
 export const readLog = (limit = 20): LogEntry[] => log.slice(-limit);
@@ -151,6 +165,7 @@ export const connectSession = (
   channel.on("presence", { event: "sync" }, () => {
     const presence = channel?.presenceState() ?? {};
     peers = Object.values(presence).flat() as unknown as Peer[];
+    notify();
   });
 
   channel.subscribe((status) => {
@@ -173,5 +188,7 @@ export const connectSession = (
     channel = null;
     hydrated = false;
     joined = false;
+    peers = [];
+    notify();
   };
 };
