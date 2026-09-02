@@ -1,6 +1,7 @@
 import { configureStore, ThunkAction, Action } from "@reduxjs/toolkit";
 import gameReducer from "./gameSlice";
 import uiReducer from "./uiSlice";
+import { sharedActionMiddleware } from "./session";
 
 export const store = configureStore({
   reducer: {
@@ -10,7 +11,7 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: false,
-    }),
+    }).concat(sharedActionMiddleware),
 });
 
 export type AppDispatch = typeof store.dispatch;

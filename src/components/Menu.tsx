@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import { useDispatch } from "react-redux";
 import styled from "styled-components";
-import { Event } from "../app/emitter";
+import emitter, { Event, SetMenuCursorPayload } from "../app/emitter";
 import useEvent from "../app/use-event";
 import Arrow from "./Arrow";
 import { MENU_MAX_HEIGHT } from "../app/constants";
+import { registerMenu, unregisterMenu } from "../state/uiSlice";
 
 interface MenuProps {
   $top?: string;
@@ -89,6 +91,34 @@ interface Props {
   setHovered?: (index: number) => void;
 }
 
+// Mirrors what is on screen into Redux so WebMCP tools can read the menu an
+// agent is looking at, and select an entry by label instead of by arrow key.
+const useMenuRegistration = (
+  key: string,
+  show: boolean,
+  items: MenuItemType[],
+  cursor: number,
+  disabled: boolean,
+  dispatch: ReturnType<typeof useDispatch>
+) => {
+  const labels = items.map((item) => item.label).join("\u0000");
+
+  useEffect(() => {
+    if (!show) return;
+    dispatch(
+      registerMenu({
+        key,
+        items: labels.split("\u0000"),
+        cursor,
+        disabled,
+      })
+    );
+    return () => {
+      dispatch(unregisterMenu(key));
+    };
+  }, [key, show, labels, cursor, disabled, dispatch]);
+};
+
 const Menu = ({
   show,
   menuItems,
@@ -108,8 +138,25 @@ const Menu = ({
   wide,
   setHovered,
 }: Props) => {
+  const dispatch = useDispatch();
+  const key = useId();
   const [activeIndex, setActiveIndex] = useState(0);
   const [scrollIndex, setScrollIndex] = useState(0);
+
+  // Lets a WebMCP tool jump the cursor straight to an entry rather than
+  // replaying arrow presses, which the compact two-column menus get wrong.
+  useEffect(() => {
+    const onSetCursor = (payload: unknown) => {
+      const { key: target, index } = payload as SetMenuCursorPayload;
+      if (target !== key) return;
+      setActiveIndex(index);
+      setScrollIndex(0);
+    };
+    emitter.on(Event.SetMenuCursor, onSetCursor);
+    return () => {
+      emitter.off(Event.SetMenuCursor, onSetCursor);
+    };
+  }, [key]);
 
   const requiresScrolling = menuItems.length > MENU_MAX_HEIGHT;
 
@@ -215,8 +262,6 @@ const Menu = ({
     setActiveIndex(0);
   });
 
-  if (!show) return null;
-
   const items =
     noSelect || noExit || noExitOption
       ? padd
@@ -237,6 +282,10 @@ const Menu = ({
             action: close,
           },
         ];
+
+  useMenuRegistration(key, show, items, activeIndex, !!disabled, dispatch);
+
+  if (!show) return null;
 
   return (
     <StyledMenu

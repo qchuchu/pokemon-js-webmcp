@@ -338,6 +338,9 @@ export const gameSlice = createSlice({
     completeQuest: (state, action: PayloadAction<string>) => {
       state.completedQuests.push(action.payload);
     },
+    // Replaces the world wholesale. Used when an agent joins a room that is
+    // already in progress and needs to catch up before its actions make sense.
+    hydrate: (_state, action: PayloadAction<GameState>) => action.payload,
   },
 });
 
@@ -378,6 +381,7 @@ export const {
   faintToTrainer,
   collectItem,
   completeQuest,
+  hydrate,
 } = gameSlice.actions;
 
 export const selectPos = (state: RootState) => state.game.pos;

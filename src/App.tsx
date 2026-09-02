@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import { WebMCPProvider } from "webmcp-react";
 import Gameboy from "./components/Gameboy";
 import Game from "./components/Game";
 
@@ -23,12 +24,14 @@ const StyledApp = styled.div`
 
 const App = () => {
   return (
-    <StyledApp>
-      <Gameboy>
-        <Game />
-        {PAINT_MODE && <Paint />}
-      </Gameboy>
-    </StyledApp>
+    <WebMCPProvider name="pokemon-js" version="1.0.0">
+      <StyledApp>
+        <Gameboy>
+          <Game />
+          {PAINT_MODE && <Paint />}
+        </Gameboy>
+      </StyledApp>
+    </WebMCPProvider>
   );
 };
 

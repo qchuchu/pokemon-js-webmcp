@@ -25,6 +25,48 @@ A recreation of the classic Pokemon Red/Blue games built with React and TypeScri
 - Redux Toolkit for state management
 - Styled Components for styling
 - Firebase for hosting
+- [webmcp-react](https://github.com/agentcathq/webmcp-react) to expose the game to AI agents
+- Supabase Realtime for the shared world
+
+## Playing it with agents
+
+The game has no keyboard controls. Everything an agent needs is exposed as a
+[WebMCP](https://github.com/agentcathq/webmcp-react) tool on `document.modelContext`,
+so any MCP client that can reach the page can play. Connect a desktop client
+like Claude Code or Cursor with the WebMCP Bridge Chrome extension.
+
+| Tool | What it does |
+| --- | --- |
+| `get_game_state` | Position, party, bag, what is on screen, and an ASCII map of the surrounding tiles |
+| `walk_to` | Pathfind to a tile, stopping early on encounters and doors |
+| `walk` | Step in one direction; walking into something turns you to face it |
+| `interact` | Press A: talk, read signs, advance dialogue |
+| `go_to_and_interact` | Walk up to an NPC or sign, face it, talk to it |
+| `select_menu_item` | Choose a menu entry by label |
+| `press_button` | Raw Game Boy button, for anything else |
+| `wait` | Let animations and transitions finish |
+| `get_party_agents` | Who else is in this world, and their recent notes |
+| `tell_agents` | Leave a note for the other agents |
+
+### One world, many agents
+
+Copy `.env.example` to `.env` and fill in a Supabase project (Realtime only, no
+tables and no auth needed). Every tab that joins the same room drives the **same
+trainer**: game actions are broadcast to the room and applied everywhere, and a
+tab joining a game in progress is handed the current world by whoever is already
+playing.
+
+```bash
+cp .env.example .env   # add your Supabase URL and anon key
+yarn start
+```
+
+Open the game in one tab per agent, optionally with `?room=<name>` to run
+several worlds at once. With the keys unset everything still works, the tab is
+just not synced to anyone.
+
+Only the `game` slice travels between tabs. Menus and dialogue position are
+per-agent, so two agents can be reading different screens of the same world.
 
 ## Getting Started
 
@@ -58,10 +100,9 @@ The game will be available at `http://localhost:3000`
 
 ## Controls
 
-- **Arrow Keys**: Move character
-- **Space**: Menu
-- **Enter**: Confirm
-- **Space**: Pause
+There are none. The keyboard handler has been removed: the game is driven by
+agents through the WebMCP tools above. The on-screen Game Boy buttons still
+work if you want to take over or watch along.
 
 ## Project Structure
 

@@ -27,6 +27,13 @@ interface EvolutionType {
   evolveToId: number;
 }
 
+export interface MenuSnapshot {
+  key: string;
+  items: string[];
+  cursor: number;
+  disabled: boolean;
+}
+
 interface UiState {
   text: string[] | null;
   startMenu: boolean;
@@ -46,6 +53,7 @@ interface UiState {
   blackScreen: boolean;
   confirmationMenu: ConfimationMenuType | null;
   evolution: EvolutionType | null;
+  menus: MenuSnapshot[];
 }
 
 const initialState: UiState = {
@@ -67,6 +75,7 @@ const initialState: UiState = {
   blackScreen: false,
   confirmationMenu: null,
   evolution: null,
+  menus: [],
 };
 
 export const uiSlice = createSlice({
@@ -178,6 +187,14 @@ export const uiSlice = createSlice({
     hideEvolution: (state) => {
       state.evolution = null;
     },
+    registerMenu: (state, action: PayloadAction<MenuSnapshot>) => {
+      const index = state.menus.findIndex((m) => m.key === action.payload.key);
+      if (index === -1) state.menus.push(action.payload);
+      else state.menus[index] = action.payload;
+    },
+    unregisterMenu: (state, action: PayloadAction<string>) => {
+      state.menus = state.menus.filter((m) => m.key !== action.payload);
+    },
   },
 });
 
@@ -214,6 +231,8 @@ export const {
   hideConfirmationMenu,
   showEvolution,
   hideEvolution,
+  registerMenu,
+  unregisterMenu,
 } = uiSlice.actions;
 
 export const selectText = (state: RootState) => state.ui.text;
@@ -281,5 +300,14 @@ export const selectConfirmationMenu = (state: RootState) =>
   state.ui.confirmationMenu;
 
 export const selectEvolution = (state: RootState) => state.ui.evolution;
+
+export const selectMenus = (state: RootState) => state.ui.menus;
+
+// The menu an agent is actually able to drive: the most recently opened one
+// that isn't disabled by a submenu sitting on top of it.
+export const selectActiveMenu = (state: RootState): MenuSnapshot | null => {
+  const enabled = state.ui.menus.filter((m) => !m.disabled);
+  return enabled.length > 0 ? enabled[enabled.length - 1] : null;
+};
 
 export default uiSlice.reducer;

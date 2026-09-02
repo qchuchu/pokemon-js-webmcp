@@ -20,6 +20,12 @@ export enum Event {
   StopMoving = "stop-moving",
   EnterDoor = "enter-door",
   HealPokemon = "heal-pokemon",
+  SetMenuCursor = "set-menu-cursor",
+}
+
+export interface SetMenuCursorPayload {
+  key: string;
+  index: number;
 }
 
 const emitter = mitt();
