@@ -29,6 +29,7 @@ import {
   connectSession,
   isShared,
   listPeers,
+  noteAgentActivity,
   readLog,
   ROOM,
   say,
@@ -36,11 +37,18 @@ import {
   setAgentLabel,
 } from "../state/session";
 
-const ok = (payload: unknown) => ({
-  content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
-});
+// Every tool answers through ok or fail, so this is the one place that knows a
+// tab is being driven rather than watched.
+const ok = (payload: unknown) => {
+  noteAgentActivity();
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
+  };
+};
 
-const fail = (message: string, payload?: unknown) => ({
+const fail = (message: string, payload?: unknown) => {
+  noteAgentActivity();
+  return {
   content: [
     {
       type: "text" as const,
@@ -48,7 +56,8 @@ const fail = (message: string, payload?: unknown) => ({
     },
   ],
   isError: true,
-});
+  };
+};
 
 /**
  * Yield long enough for React to flush the dispatch and run the effects that

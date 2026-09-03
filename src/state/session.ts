@@ -248,6 +248,35 @@ export const saveNow = async (): Promise<string> => {
 
 export const isRestored = () => restored;
 
+// Whether this tab has already been counted as agent-driven.
+let notedAgent = false;
+
+/**
+ * Records that this tab exists, and separately that something is driving it
+ * through the tools. Two rows is all the usage data there is: no IP, no user
+ * agent, nothing tied to a person - just enough to tell how many tabs joined
+ * and how many of them brought an agent.
+ *
+ * Fire and forget on purpose. Stats are never worth failing a page load for,
+ * and the table may not exist yet.
+ */
+const record = (kind: "connect" | "agent") => {
+  if (!client) return;
+  client
+    .from("visits")
+    .insert({ room: ROOM, agent_id: AGENT_ID, kind })
+    .then(({ error }) => {
+      if (error) console.warn("[pokemon] could not record a visit", error.message);
+    });
+};
+
+/** Called by the tools, so a tab that is only ever watched is not counted. */
+export const noteAgentActivity = () => {
+  if (notedAgent || !client) return;
+  notedAgent = true;
+  record("agent");
+};
+
 export const connectSession = (
   dispatch: (action: AnyAction) => void,
   getSharedState: () => SharedState
@@ -330,6 +359,7 @@ export const connectSession = (
       event: "request-state",
       payload: { from: AGENT_ID },
     });
+    record("connect");
 
     // Nobody answered, so the room is empty and the database holds the world.
     setTimeout(() => {
@@ -349,6 +379,7 @@ export const connectSession = (
     joined = false;
     ready = false;
     restored = false;
+    notedAgent = false;
     readSharedState = null;
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = null;

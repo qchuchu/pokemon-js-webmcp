@@ -119,6 +119,34 @@ to what is happening now rather than to the last write.
 nothing you have to remember to do. Without Supabase configured the game falls
 back to the original per-browser `localStorage` save.
 
+### Usage stats
+
+`visits` records one row when a tab joins a room, and one more the first time
+that tab calls a tool. That is the whole of it: no IP, no user agent, nothing
+tied to a person, so there is nothing to consent to or leak. The policy is
+insert-only, so the bundle can record a visit but nothing in a browser can read
+the numbers back.
+
+Read them with the service role, in the Supabase SQL editor:
+
+```sql
+-- Connections per day, and how many brought an agent
+select date_trunc('day', at) as day,
+       count(*) filter (where kind = 'connect')      as tabs,
+       count(*) filter (where kind = 'agent')        as agent_driven,
+       count(distinct agent_id)                      as distinct_sessions
+from visits group by 1 order by 1 desc;
+```
+
+```sql
+-- Busiest hours, for a chart
+select date_trunc('hour', at) as hour, count(*) as tabs
+from visits where kind = 'connect' group by 1 order by 1;
+```
+
+Anyone holding the anon key can insert a row, so treat the numbers as
+indicative rather than trustworthy.
+
 The migration in `supabase/migrations` leaves the `rooms` table readable and
 writable by `anon` on purpose: anyone who can load the game can join any room by
 name. Do not keep anything private in it.
