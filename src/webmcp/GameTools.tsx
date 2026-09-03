@@ -17,6 +17,7 @@ import { Direction, PosType } from "../state/state-types";
 import findPath, { adjacentTiles } from "./pathfinding";
 import {
   battlePhase,
+  buildMapOverview,
   buildSnapshot,
   describeTile,
   facingOffset,
@@ -177,6 +178,21 @@ const GameTools = () => {
         ...snapshot.surroundings,
       });
     },
+  });
+
+  useMcpTool({
+    name: "map_overview",
+    title: "See the whole current map",
+    description:
+      "The entire map you are standing on as one ASCII grid, plus every door, " +
+      "item, trainer and sign on it with absolute coordinates. Doors are " +
+      "labelled with the map they lead to, so this is how you find the Pokemon " +
+      "Center, a shop or the gym: look for the door whose target names it. Use " +
+      "look while walking; use this when you need to decide where to go. " +
+      `Legend: ${MAP_LEGEND}`,
+    input: z.object({}),
+    annotations: { readOnlyHint: true },
+    handler: async () => ok(buildMapOverview(store.getState())),
   });
 
   useMcpTool({

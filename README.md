@@ -70,6 +70,7 @@ available with no extension or setup.
 | --- | --- |
 | `get_game_state` | Position, party, bag, what is on screen, and an ASCII map of the surrounding tiles |
 | `look` | Just the surroundings: the ASCII map plus doors, people and items with absolute coordinates |
+| `map_overview` | The whole current map, with every door labelled by the map it leads to - how you find the Pokemon Center or the gym |
 | `walk_to` | Pathfind to a tile, stopping early on encounters and doors |
 | `walk` | Step in one direction; walking into something turns you to face it |
 | `interact` | Press A: talk, read signs, advance dialogue |

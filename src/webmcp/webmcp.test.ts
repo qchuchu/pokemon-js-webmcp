@@ -20,7 +20,12 @@ import {
 } from "../state/uiSlice";
 import mapData from "../maps/map-data";
 import { store } from "../state/store";
-import { battlePhase, buildSnapshot, waitingFor } from "./snapshot";
+import {
+  battlePhase,
+  buildMapOverview,
+  buildSnapshot,
+  waitingFor,
+} from "./snapshot";
 import { acceptsInput, CHOOSE_ACTION_STAGE } from "../state/battleSlice";
 import { GameState } from "../state/state-types";
 import { ItemType } from "../app/item-types";
@@ -248,5 +253,51 @@ describe("a battle survives the page that started it", () => {
   it("resumes to a stage that actually wants input", () => {
     expect(battlePhase(CHOOSE_ACTION_STAGE)).toBe("choose-action");
     expect(acceptsInput(CHOOSE_ACTION_STAGE)).toBe(true);
+  });
+});
+
+describe("finding your way around a town", () => {
+  const inViridianCity = () => {
+    const initial = gameReducer(undefined, { type: "@@init" });
+    return {
+      ...store.getState(),
+      game: { ...initial, map: MapId.ViridianCity, pos: { x: 23, y: 26 } },
+    };
+  };
+
+  it("labels every door with the map it leads to", () => {
+    // The window around the player cannot answer "where is the Pokemon
+    // Center": the building is off-screen, and only its own interior map ever
+    // declares a healing counter. The doors have to name themselves.
+    const overview = buildMapOverview(inViridianCity() as never);
+
+    const doors = overview.notable.filter((tile) => tile.kind === "door");
+    expect(doors.length).toBeGreaterThan(4);
+    expect(doors.every((door) => !!door.to)).toBe(true);
+
+    const center = doors.find(
+      (door) => door.to === MapId.ViridianCityPokemonCenter
+    );
+    expect(center).toBeDefined();
+    expect(overview.notable).toContainEqual(
+      expect.objectContaining({ to: MapId.ViridianCityGym })
+    );
+  });
+
+  it("renders the whole map, and stays small enough to read often", () => {
+    const overview = buildMapOverview(inViridianCity() as never);
+
+    expect(overview.fullMap).toHaveLength(overview.mapSize.height);
+    overview.fullMap.forEach((row) =>
+      expect(row).toHaveLength(overview.mapSize.width)
+    );
+    // Route 3 is the biggest map in the game at 73x36; keep the whole payload
+    // in the hundreds of tokens, not the thousands.
+    expect(JSON.stringify(overview).length).toBeLessThan(8000);
+  });
+
+  it("reports no healing counter while you are outdoors", () => {
+    // A town does not declare one; that is exactly why doors need labels.
+    expect(buildMapOverview(inViridianCity() as never).pokemonCenter).toBeNull();
   });
 });

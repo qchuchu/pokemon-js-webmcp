@@ -49,24 +49,61 @@ const isMapChange = (map: MapType, x: number, y: number) =>
   isExit(map.exits, x, y) ||
   !!(map.teleports && map.teleports[y] && map.teleports[y][x]);
 
+/**
+ * Which map a door leads to. The map data already knows, so a door reported
+ * without it is throwing the answer away: five identical doors in a town leave
+ * an agent no way to tell the Pokemon Center from a stranger's house.
+ */
+const doorTarget = (map: MapType, x: number, y: number): MapId | null => {
+  const through = map.maps[y] && map.maps[y][x];
+  if (through) return through;
+  const teleport = map.teleports && map.teleports[y] && map.teleports[y][x];
+  if (teleport) return teleport.map;
+  // A plain exit tile has no destination of its own; it returns you to whatever
+  // map this one was entered from.
+  if (isExit(map.exits, x, y)) return map.exitReturnMap ?? null;
+  return null;
+};
+
 const uncollectedItem = (map: MapType, mapId: MapId, collected: string[]) =>
   (map.items || []).filter(
     (item) => !collected.includes(`${mapId}-${item.pos.x}-${item.pos.y}`)
   );
 
+export interface Bounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+const around = (pos: PosType, radius: number): Bounds => ({
+  minX: pos.x - radius,
+  minY: pos.y - radius,
+  maxX: pos.x + radius,
+  maxY: pos.y + radius,
+});
+
+const whole = (map: MapType): Bounds => ({
+  minX: 0,
+  minY: 0,
+  maxX: map.width - 1,
+  maxY: map.height - 1,
+});
+
 /**
- * A small ASCII view around the player. Far cheaper for an agent to reason
- * about than a coordinate dump, and it is the only way to see doors and walls.
+ * An ASCII view of part of a map. Far cheaper for an agent to reason about than
+ * a coordinate dump, and it is the only way to see doors and walls.
  */
-const renderLocalMap = (state: RootState): string[] => {
+const renderArea = (state: RootState, bounds: Bounds): string[] => {
   const { pos, map: mapId, collectedItems, defeatedTrainers } = state.game;
   const map = mapData[mapId];
   const items = uncollectedItem(map, mapId, collectedItems);
 
   const rows: string[] = [];
-  for (let y = pos.y - VIEW_RADIUS; y <= pos.y + VIEW_RADIUS; y++) {
+  for (let y = bounds.minY; y <= bounds.maxY; y++) {
     let row = "";
-    for (let x = pos.x - VIEW_RADIUS; x <= pos.x + VIEW_RADIUS; x++) {
+    for (let x = bounds.minX; x <= bounds.maxX; x++) {
       if (x < 0 || y < 0 || x >= map.width || y >= map.height) {
         row += " ";
         continue;
@@ -136,14 +173,14 @@ export const battlePhase = (stage: number): string => {
  * from localMapOrigin, which is easy to get wrong; these can be passed
  * straight to walk_to or go_to_and_interact.
  */
-const notableTiles = (state: RootState) => {
+const notableTiles = (state: RootState, bounds: Bounds) => {
   const { pos, map: mapId, collectedItems, defeatedTrainers } = state.game;
   const map = mapData[mapId];
   const items = uncollectedItem(map, mapId, collectedItems);
-  const found: { x: number; y: number; kind: string }[] = [];
+  const found: { x: number; y: number; kind: string; to?: MapId }[] = [];
 
-  for (let y = pos.y - VIEW_RADIUS; y <= pos.y + VIEW_RADIUS; y++) {
-    for (let x = pos.x - VIEW_RADIUS; x <= pos.x + VIEW_RADIUS; x++) {
+  for (let y = bounds.minY; y <= bounds.maxY; y++) {
+    for (let x = bounds.minX; x <= bounds.maxX; x++) {
       if (x < 0 || y < 0 || x >= map.width || y >= map.height) continue;
       if (x === pos.x && y === pos.y) continue;
       if (items.some((item) => item.pos.x === x && item.pos.y === y)) {
@@ -156,7 +193,8 @@ const notableTiles = (state: RootState) => {
           kind: defeatedTrainers.includes(id) ? "trainer-beaten" : "trainer",
         });
       } else if (isMapChange(map, x, y)) {
-        found.push({ x, y, kind: "door" });
+        const to = doorTarget(map, x, y);
+        found.push({ x, y, kind: "door", ...(to ? { to } : {}) });
       } else if (hasText(map, x, y)) {
         found.push({ x, y, kind: "sign-or-npc" });
       }
@@ -229,6 +267,37 @@ const describePokemon = (pokemon: PokemonInstance, index: number) => {
         damageClass: metadata.damageClass,
       };
     }),
+  };
+};
+
+/**
+ * The whole current map at once, with every door labelled by where it goes.
+ *
+ * The windowed view is the right default for walking, but it cannot answer
+ * "where is the Pokemon Center" - the building is usually off-screen, and the
+ * map data only names a Center on its own interior map, never on the town
+ * outside it. Scoped to the map you are standing on: the largest in the game is
+ * 73x36, so this stays a few hundred tokens.
+ */
+export const buildMapOverview = (state: RootState) => {
+  const { game } = state;
+  const map = mapData[game.map];
+  const bounds = whole(map);
+
+  return {
+    map: game.map,
+    mapName: map.name,
+    mapSize: { width: map.width, height: map.height },
+    pos: game.pos,
+    fullMap: renderArea(state, bounds),
+    legend: MAP_LEGEND,
+    // Every door, item, trainer and sign on the map, not just the ones in view.
+    notable: notableTiles(state, bounds),
+    // Only ever set on a building's own interior map, so these are null while
+    // you are outside; the labelled doors are how you find one from a town.
+    pokemonCenter: map.pokemonCenter ?? null,
+    pokeMart: map.store ?? null,
+    pc: map.pc ?? null,
   };
 };
 
@@ -323,14 +392,15 @@ export const buildSnapshot = (state: RootState) => {
         walkable: canWalk(front.x, front.y, game.map, game.collectedItems),
         readable: hasText(map, front.x, front.y),
         door: isMapChange(map, front.x, front.y),
+        leadsTo: doorTarget(map, front.x, front.y),
       },
       onGrass: isGrass(map.grass, game.pos.x, game.pos.y),
       pokemonCenter: map.pokemonCenter,
       pokeMart: map.store,
       pc: map.pc,
-      localMap: renderLocalMap(state),
+      localMap: renderArea(state, around(game.pos, VIEW_RADIUS)),
       localMapLegend: MAP_LEGEND,
-      notable: notableTiles(state),
+      notable: notableTiles(state, around(game.pos, VIEW_RADIUS)),
       localMapOrigin: {
         x: game.pos.x - VIEW_RADIUS,
         y: game.pos.y - VIEW_RADIUS,
