@@ -11,6 +11,13 @@ import {
   takeControl,
 } from "../state/session";
 
+// GlobalStyles sets `* { color: var(--main) }`, which lands on every element
+// directly and so breaks inheritance: a wrapper with no colour of its own
+// computes to black, and `color: inherit` beneath it faithfully picks that up.
+// Nothing in this panel may rely on inheriting a colour or a font.
+const TEXT = "#e8e8e8";
+const FONT = 'ui-monospace, SFMono-Regular, Menlo, monospace';
+
 const Panel = styled.div`
   position: fixed;
   right: 12px;
@@ -24,8 +31,8 @@ const Panel = styled.div`
   border-radius: 10px;
   background: rgba(16, 16, 18, 0.86);
   border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #e8e8e8;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: ${TEXT};
+  font-family: ${FONT};
   font-size: 11px;
   backdrop-filter: blur(6px);
 
@@ -45,8 +52,9 @@ const Header = styled.button`
   background: none;
   border: none;
   padding: 0;
-  color: inherit;
-  font: inherit;
+  color: ${TEXT};
+  font-family: ${FONT};
+  font-size: 11px;
   cursor: pointer;
   text-align: left;
 `;
@@ -56,6 +64,8 @@ const Driving = styled.div`
   border-radius: 6px;
   background: rgba(60, 185, 68, 0.14);
   border: 1px solid rgba(60, 185, 68, 0.35);
+  color: ${TEXT};
+  font-size: 11px;
   line-height: 1.35;
 `;
 
@@ -70,11 +80,15 @@ const Log = styled.div`
 
 const Line = styled.div`
   word-break: break-word;
+  color: ${TEXT};
+  font-family: ${FONT};
+  font-size: 11px;
 `;
 
 const Who = styled.span`
   opacity: 0.55;
   margin-right: 5px;
+  color: ${TEXT};
 `;
 
 const Row = styled.div`
@@ -89,8 +103,11 @@ const Input = styled.input`
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(0, 0, 0, 0.35);
-  color: inherit;
-  font: inherit;
+  color: ${TEXT};
+  -webkit-text-fill-color: ${TEXT};
+  caret-color: ${TEXT};
+  font-family: ${FONT};
+  font-size: 11px;
 
   &::placeholder {
     color: rgba(255, 255, 255, 0.35);
@@ -102,8 +119,9 @@ const Button = styled.button`
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.08);
-  color: inherit;
-  font: inherit;
+  color: ${TEXT};
+  font-family: ${FONT};
+  font-size: 11px;
   cursor: pointer;
   white-space: nowrap;
 
