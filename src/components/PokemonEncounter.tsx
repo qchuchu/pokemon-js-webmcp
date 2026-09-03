@@ -21,13 +21,15 @@ import {
   updatePokemonEncounter,
   updateSpecificPokemon,
 } from "../state/gameSlice";
-import usePokemonMetadata from "../app/use-pokemon-metadata";
+import usePokemonMetadata, {
+  getPokemonMetadata,
+} from "../app/use-pokemon-metadata";
 import Frame from "./Frame";
 import HealthBar from "./HealthBar";
 import usePokemonStats from "../app/use-pokemon-stats";
 
 import corner from "../assets/ui/corner.png";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import useEvent from "../app/use-event";
 import { Event } from "../app/emitter";
 
@@ -631,6 +633,11 @@ const PokemonEncounter = () => {
     selectProcessingInvolvedPokemon
   );
 
+  // The intro effect reruns on presence changes and must not restart a fight
+  // already under way, so it needs the live stage without taking it as a dep.
+  const stageRef = useRef(stage);
+  stageRef.current = stage;
+
   const setStage = (value: number) => dispatch(setStageAction(value));
   const setTrainerPokemonIndex = (value: number) =>
     dispatch(setTrainerPokemonIndexAction(value));
@@ -765,20 +772,25 @@ const PokemonEncounter = () => {
     // the shared state, and each one would run its own intro timers.
     if (!driving) return;
 
-    if (isInBattle) {
-      dispatch(resetActivePokemon());
-      setStage(0);
-      setTimeout(() => {
-        setStage(1);
-      }, 2000);
-      setTimeout(() => {
-        setStage(2);
-      }, 3300);
-    }
-
     if (!isInBattle) {
       setStage(-1);
+      return;
     }
+
+    // `driving` flips whenever presence syncs, so this effect also reruns when
+    // a peer joins or leaves. The choreography is shared state, so a stage is
+    // already set for a fight in progress: replaying the intro from 0 would
+    // rewind the battle under everyone and drop the menu an agent was driving.
+    if (stageRef.current >= 0) return;
+
+    dispatch(resetActivePokemon());
+    setStage(0);
+    setTimeout(() => {
+      setStage(1);
+    }, 2000);
+    setTimeout(() => {
+      setStage(2);
+    }, 3300);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInBattle, dispatch, driving]);
 
@@ -807,6 +819,28 @@ const PokemonEncounter = () => {
     setTimeout(() => {
       setStage(11);
     }, MOVEMENT_ANIMATION * 2 + FRAME_DURATION * 5 + 500);
+  };
+
+  /**
+   * Both ways into a switch route through here so neither can send out a
+   * fainted Pokemon. The voluntary switch used to allow it, which wastes the
+   * turn and leaves a 0 HP Pokemon on the field; and refusing silently is just
+   * as bad for an agent, which sees nothing happen, so say why.
+   */
+  const sendOut = (index: number) => {
+    const chosen = pokemon[index];
+    if (!chosen) return;
+    if (chosen.hp <= 0) {
+      setClickableNotice(
+        `${getPokemonMetadata(
+          chosen.id
+        ).name.toUpperCase()} has no energy left to battle!`
+      );
+      return;
+    }
+    dispatch(setActivePokemon(index));
+    setInvolvedPokemon([...involvedPokemon, index]);
+    throwPokeball();
   };
 
   const throwPokeballAtEnemy = (end: number = 39) => {
@@ -894,6 +928,7 @@ const PokemonEncounter = () => {
       }, FRAME_DURATION * 6);
       dispatch(stopThrowingPokeball());
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pokeballThrowing, enemy, dispatch, isTrainer]);
 
   useEvent(Event.A, () => {
@@ -1468,14 +1503,7 @@ const PokemonEncounter = () => {
             right="0"
           />
           {stage === 13 && (
-            <PokemonList
-              close={() => setStage(11)}
-              switchAction={(index) => {
-                dispatch(setActivePokemon(index));
-                setInvolvedPokemon([...involvedPokemon, index]);
-                throwPokeball();
-              }}
-            />
+            <PokemonList close={() => setStage(11)} switchAction={sendOut} />
           )}
           <MoveSelect
             show={stage === 14}
@@ -1486,12 +1514,7 @@ const PokemonEncounter = () => {
             <PokemonList
               text="Bring out which POKéMON?"
               close={() => {}}
-              switchAction={(index) => {
-                if (pokemon[index].hp <= 0) return;
-                dispatch(setActivePokemon(index));
-                setInvolvedPokemon([...involvedPokemon, index]);
-                throwPokeball();
-              }}
+              switchAction={sendOut}
             />
           )}
           <Menu
