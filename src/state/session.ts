@@ -54,6 +54,9 @@ let readSharedState: (() => SharedState) | null = null;
 // send() silently falls back to REST until the socket has joined, which would
 // turn every walk step into an HTTP request. Nothing goes out before this.
 let joined = false;
+// Whether this tab knows what the world looks like. Until it does the store
+// still holds a fresh Pallet Town, which is not the world anyone is playing.
+let ready = false;
 
 export const isShared = () => !!url && !!anonKey;
 
@@ -63,7 +66,7 @@ const listeners = new Set<() => void>();
 
 const notify = () => listeners.forEach((listener) => listener());
 
-export const subscribePeers = (listener: () => void) => {
+export const subscribeSession = (listener: () => void) => {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
@@ -72,6 +75,19 @@ export const subscribePeers = (listener: () => void) => {
 
 // Stable reference between presence syncs, which useSyncExternalStore requires.
 export const listPeers = (): Peer[] => peers;
+
+/**
+ * True once this tab knows the world: it was handed the live state, loaded the
+ * save, or established there is nothing to load. Rendering before this shows
+ * the initial Pallet Town and then snaps to the real world a moment later.
+ */
+export const isReady = () => !isShared() || ready;
+
+const markReady = () => {
+  if (ready) return;
+  ready = true;
+  notify();
+};
 
 /**
  * Exactly one tab drives the world's emergent logic: encounter rolls, battle
@@ -152,6 +168,9 @@ const SAVE_DEBOUNCE = 2000;
 // How long to let live peers answer before falling back to the database.
 const HANDSHAKE_GRACE = 900;
 
+// Upper bound on the loading screen when the socket or the query never answers.
+const READY_TIMEOUT = 8000;
+
 /**
  * The room is the save file. Only the driver writes, and only after the room
  * has been restored, so a late joiner can never clobber the shared world.
@@ -173,7 +192,7 @@ const scheduleSave = (getSharedState: () => SharedState) => {
 
 /** Load the room from the database when no one is already playing it. */
 const restoreRoom = async (dispatch: (action: AnyAction) => void) => {
-  if (!client || hydrated) return;
+  if (!client || hydrated) return markReady();
 
   const { data, error } = await client
     .from("rooms")
@@ -183,11 +202,12 @@ const restoreRoom = async (dispatch: (action: AnyAction) => void) => {
 
   // A tab that answered the live handshake while this request was in flight
   // wins: its state is newer than anything on disk.
-  if (hydrated) return;
+  if (hydrated) return markReady();
 
   if (error) {
     // Stay read-only rather than risk saving a fresh world over a real one.
     console.warn("[pokemon] could not load room", error.message);
+    markReady();
     return;
   }
 
@@ -205,6 +225,7 @@ const restoreRoom = async (dispatch: (action: AnyAction) => void) => {
 
   // Either the room was loaded or it genuinely has no save yet.
   restored = true;
+  markReady();
 };
 
 /** Flush the room now instead of waiting out the debounce. */
@@ -286,6 +307,7 @@ export const connectSession = (
     // Someone live is further along than the database, so this tab is caught
     // up and may start saving.
     restored = true;
+    markReady();
   });
 
   // `state` fires whenever anyone joins or leaves, so one handler is enough.
@@ -315,11 +337,17 @@ export const connectSession = (
     }, HANDSHAKE_GRACE);
   });
 
+  // A socket that never opens must not leave the loader up for ever: show the
+  // world we have rather than nothing at all.
+  const readyFallback = setTimeout(markReady, READY_TIMEOUT);
+
   return () => {
+    clearTimeout(readyFallback);
     channel?.unsubscribe();
     channel = null;
     hydrated = false;
     joined = false;
+    ready = false;
     restored = false;
     readSharedState = null;
     if (saveTimer) clearTimeout(saveTimer);

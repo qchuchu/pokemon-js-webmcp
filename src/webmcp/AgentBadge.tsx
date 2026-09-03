@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import styled, { keyframes } from "styled-components";
-import { isShared, listPeers, ROOM, subscribePeers } from "../state/session";
+import { isShared, listPeers, ROOM, subscribeSession } from "../state/session";
 
 const pulse = keyframes`
   0% { opacity: 1; }
@@ -49,7 +49,7 @@ const Room = styled.span`
 `;
 
 const AgentBadge = () => {
-  const peers = useSyncExternalStore(subscribePeers, listPeers, listPeers);
+  const peers = useSyncExternalStore(subscribeSession, listPeers, listPeers);
 
   if (!isShared()) return null;
 

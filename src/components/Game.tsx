@@ -33,6 +33,7 @@ import LearnMove from "../app/LearnMove";
 import QuestHandler from "./QuestHandler";
 import ConfirmationMenu from "./ConfirmationMenu";
 import Evolution from "./Evolution";
+import useIsReady from "../state/use-is-ready";
 
 const Container = styled.div`
   position: absolute;
@@ -84,9 +85,28 @@ const ColorOverlay = styled.div`
   opacity: 0.5;
 `;
 
+const Loading = styled.div`
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "PokemonGB";
+  text-align: center;
+  padding: 0 10%;
+
+  font-size: 4vh;
+  @media (max-width: 1000px) {
+    font-size: 11px;
+  }
+`;
+
 const Game = () => {
   const pos = useSelector(selectPos);
   const map = useSelector(selectMap);
+  const ready = useIsReady();
 
   return (
     <Container>
@@ -137,6 +157,10 @@ const Game = () => {
       <EncounterHandler />
       <SpinningHandler />
       <QuestHandler />
+
+      {/* Last, so it covers the world. The handlers above stay mounted because
+          GameTools is what opens the session that decides we are ready. */}
+      {!ready && <Loading>Loading world...</Loading>}
     </Container>
   );
 };
