@@ -20,9 +20,27 @@ export interface Peer {
 }
 
 export interface LogEntry {
+  /** Display name, chosen by whoever posted. Not an identity. */
   agentId: string;
+  /** The posting tab, so a tab never gets handed back its own note. */
+  sender?: string;
   text: string;
   at: string;
+}
+
+/**
+ * Who is allowed to drive right now. Coordination, not world state, so it lives
+ * here rather than in the store: a tab that misses it is briefly out of date,
+ * which is cheaper than making it part of the shared save file.
+ */
+export interface Lease {
+  agentId: string;
+  label: string;
+  reason: string;
+  /** ISO time the claim lapses on its own. */
+  until: string;
+  /** A person's claim outranks an agent's and is taken, not requested. */
+  human: boolean;
 }
 
 /**
@@ -42,6 +60,9 @@ let applyingRemote = false;
 let channel: RealtimeChannel | null = null;
 let peers: Peer[] = [];
 let log: LogEntry[] = [];
+// How much of the log this tab has already been handed by a tool response.
+let delivered = 0;
+let lease: Lease | null = null;
 let label = AGENT_ID;
 let hydrated = false;
 let client: SupabaseClient | null = null;
@@ -118,8 +139,17 @@ export const isDriver = (): boolean => {
 export const readLog = (limit = 20): LogEntry[] => log.slice(-limit);
 
 const appendLog = (entry: LogEntry) => {
+  const dropped = Math.max(0, log.length + 1 - 200);
   log = [...log, entry].slice(-200);
+  delivered = Math.max(0, delivered - dropped);
+  notify();
 };
+
+/**
+ * A stable reference, which useSyncExternalStore requires: readLog() slices, so
+ * it returns a fresh array every call and would re-render for ever.
+ */
+export const getLog = (): LogEntry[] => log;
 
 export const setAgentLabel = (next: string) => {
   label = next;
@@ -133,9 +163,94 @@ export const setAgentLabel = (next: string) => {
 };
 
 export const say = (text: string) => {
-  const entry: LogEntry = { agentId: label, text, at: new Date().toISOString() };
+  const entry: LogEntry = {
+    agentId: label,
+    sender: AGENT_ID,
+    text,
+    at: new Date().toISOString(),
+  };
   appendLog(entry);
+  // Nothing this tab said needs handing back to it as news.
+  delivered = log.length;
   if (joined) channel?.send({ type: "broadcast", event: "note", payload: entry });
+};
+
+/**
+ * Notes posted since this tab was last handed any, and never its own.
+ *
+ * Tools return these alongside every result, because a note board nobody reads
+ * is not a channel: an agent part-way through a plan does not stop to check its
+ * messages, so the messages have to arrive where it is already looking.
+ */
+export const takeMessages = (): LogEntry[] => {
+  const fresh = log.slice(delivered).filter((entry) => entry.sender !== AGENT_ID);
+  delivered = log.length;
+  return fresh;
+};
+
+const leaseHolder = (): Lease | null => {
+  if (!lease) return null;
+  if (Date.parse(lease.until) <= Date.now()) {
+    lease = null;
+    notify();
+  }
+  return lease;
+};
+
+export const readLease = (): Lease | null => leaseHolder();
+
+/** Why a write is refused right now, or null when this tab may act. */
+export const leaseBlocking = (): string | null => {
+  const held = leaseHolder();
+  if (!held || held.agentId === AGENT_ID) return null;
+  const who = held.human ? `${held.label} (a person)` : held.label;
+  const seconds = Math.max(0, Math.round((Date.parse(held.until) - Date.now()) / 1000));
+  return `${who} is driving for the next ${seconds}s: ${held.reason}`;
+};
+
+const broadcastLease = () => {
+  if (joined) {
+    channel?.send({ type: "broadcast", event: "lease", payload: lease });
+  }
+  notify();
+};
+
+/**
+ * Claim the avatar. A person's claim always lands; an agent's is refused while
+ * someone else holds one, so taking a turn is asked for rather than assumed.
+ */
+export const takeControl = (
+  reason: string,
+  seconds: number,
+  human = false
+): { ok: boolean; message: string } => {
+  const held = leaseHolder();
+  if (held && held.agentId !== AGENT_ID && !human) {
+    return { ok: false, message: leaseBlocking() as string };
+  }
+  lease = {
+    agentId: AGENT_ID,
+    label,
+    reason,
+    until: new Date(Date.now() + seconds * 1000).toISOString(),
+    human,
+  };
+  broadcastLease();
+  return {
+    ok: true,
+    message: `You are driving for ${seconds}s: ${reason}`,
+  };
+};
+
+export const releaseControl = (force = false): string => {
+  const held = leaseHolder();
+  if (!held) return "Nobody was driving.";
+  if (held.agentId !== AGENT_ID && !force) {
+    return `Not yours to release - ${leaseBlocking()}`;
+  }
+  lease = null;
+  broadcastLease();
+  return "Released. Anyone may drive.";
 };
 
 export const sharedActionMiddleware: Middleware = () => (next) => (action) => {
@@ -312,6 +427,11 @@ export const connectSession = (
     if (payload) appendLog(payload as LogEntry);
   });
 
+  channel.on("broadcast", { event: "lease" }, ({ payload }) => {
+    lease = (payload as Lease | null) ?? null;
+    notify();
+  });
+
   // A late joiner has an empty Pallet Town; whoever is already playing answers
   // with the live world. First answer wins, extras are ignored.
   channel.on("broadcast", { event: "request-state" }, ({ payload }) => {
@@ -319,13 +439,25 @@ export const connectSession = (
     channel?.send({
       type: "broadcast",
       event: "state",
-      payload: { from: AGENT_ID, to: payload.from, state: getSharedState() },
+      payload: {
+        from: AGENT_ID,
+        to: payload.from,
+        state: getSharedState(),
+        lease: leaseHolder(),
+        log: log.slice(-30),
+      },
     });
   });
 
   channel.on("broadcast", { event: "state" }, ({ payload }) => {
     if (!payload || payload.to !== AGENT_ID || hydrated) return;
     hydrated = true;
+    // Catch up on the conversation and on whose turn it is, not just the world.
+    if (payload.lease) lease = payload.lease as Lease;
+    if (Array.isArray(payload.log)) {
+      log = payload.log as LogEntry[];
+      delivered = log.length;
+    }
     applyingRemote = true;
     try {
       dispatch({ type: "game/hydrate", payload: payload.state.game });
@@ -380,6 +512,8 @@ export const connectSession = (
     ready = false;
     restored = false;
     notedAgent = false;
+    lease = null;
+    delivered = 0;
     readSharedState = null;
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = null;

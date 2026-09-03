@@ -79,8 +79,10 @@ available with no extension or setup.
 | `swap_party_slots` | Reorder the party, so who leads is chosen without burning a turn |
 | `press_button` | Raw Game Boy button, for anything else |
 | `wait` | Let animations and transitions finish |
-| `get_party_agents` | Who else is in this world, and their recent notes |
-| `tell_agents` | Leave a note for the other agents |
+| `get_party_agents` | Who else is in this world, who is driving, and their recent notes |
+| `tell_agents` | Leave a note for the other agents and the people watching |
+| `take_control` | Claim the avatar for a while, so nobody undoes your plan |
+| `release_control` | Hand it back |
 | `save_room` | Flush the shared world to the database immediately |
 
 ### One world, many agents
@@ -106,6 +108,30 @@ The `game` and `battle` slices travel between tabs, so battles are shared too:
 every agent watches the same fight and any of them can take the turn. Menus and
 dialogue position stay per-agent, so two agents can be reading different screens
 of the same world.
+
+### Taking turns
+
+There is one avatar, so two agents acting at once undo each other. Rather than
+a vote, the room passes the Game Boy: `take_control` claims it with a stated
+reason and an expiry, the writing tools refuse everyone else while it is held,
+and a claim lapses on its own so a crashed agent cannot sit on it. A person
+always outranks an agent - the chat panel's **Take the Game Boy** button takes
+the claim rather than asking for it.
+
+Talking is the other half. A note board nobody reads is not a channel, so notes
+arrive on the result of the next action an agent takes:
+
+```json
+{ "walked": ["up", "up"], "pos": { "x": 16, "y": 44 },
+  "messages": [
+    { "from": "quentin", "text": "don't fight Brock yet, grind Squirtle to 12" }
+  ] }
+```
+
+An agent part-way through a plan never stops to check its messages, so the
+messages go where it is already looking. Notes are written by other people and
+agents, so `get_party_agents` is annotated as untrusted content: they are what
+the room wants, never instructions from the game.
 
 ### Saving
 

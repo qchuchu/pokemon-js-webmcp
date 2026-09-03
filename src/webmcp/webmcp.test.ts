@@ -29,7 +29,15 @@ import {
 import { acceptsInput, CHOOSE_ACTION_STAGE } from "../state/battleSlice";
 import { GameState } from "../state/state-types";
 import { ItemType } from "../app/item-types";
-import { pickDriver } from "../state/session";
+import {
+  leaseBlocking,
+  pickDriver,
+  readLease,
+  releaseControl,
+  say,
+  takeControl,
+  takeMessages,
+} from "../state/session";
 
 describe("module graph", () => {
   it("resolves ItemType when the map layer is loaded first", () => {
@@ -299,5 +307,46 @@ describe("finding your way around a town", () => {
   it("reports no healing counter while you are outdoors", () => {
     // A town does not declare one; that is exactly why doors need labels.
     expect(buildMapOverview(inViridianCity() as never).pokemonCenter).toBeNull();
+  });
+});
+
+describe("taking turns with one avatar", () => {
+  afterEach(() => releaseControl(true));
+
+  it("hands a tab only what it has not already heard, and never its own notes", () => {
+    takeMessages();
+    say("party is too low, grind Squirtle to 12 first");
+
+    // Your own note is not news to you, or an agent would answer itself.
+    expect(takeMessages()).toEqual([]);
+  });
+
+  it("does not block the tab that holds the claim", () => {
+    expect(leaseBlocking()).toBeNull();
+
+    const claimed = takeControl("grinding to level 12", 300);
+    expect(claimed.ok).toBe(true);
+    expect(readLease()?.reason).toBe("grinding to level 12");
+
+    // The holder keeps acting; only everyone else is refused.
+    expect(leaseBlocking()).toBeNull();
+  });
+
+  it("lapses on its own, so a crashed agent cannot hold the avatar for ever", () => {
+    takeControl("a claim that has already run out", 10);
+    const lease = readLease();
+    expect(lease).not.toBeNull();
+
+    // Rewind the expiry rather than waiting out a real timer.
+    (lease as { until: string }).until = new Date(Date.now() - 1000).toISOString();
+    expect(readLease()).toBeNull();
+    expect(leaseBlocking()).toBeNull();
+  });
+
+  it("releases only what is yours unless forced", () => {
+    takeControl("mine", 300);
+    expect(releaseControl()).toBe("Released. Anyone may drive.");
+    expect(readLease()).toBeNull();
+    expect(releaseControl()).toBe("Nobody was driving.");
   });
 });

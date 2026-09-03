@@ -1,6 +1,7 @@
 import styled from "styled-components";
 import { WebMCPProvider } from "webmcp-react";
 import AgentBadge from "./webmcp/AgentBadge";
+import RoomChat from "./webmcp/RoomChat";
 import Gameboy from "./components/Gameboy";
 import Game from "./components/Game";
 
@@ -27,6 +28,7 @@ const App = () => {
   return (
     <WebMCPProvider name="pokemon-js" version="1.0.0">
       <AgentBadge />
+      <RoomChat />
       <StyledApp>
         <Gameboy>
           <Game />
