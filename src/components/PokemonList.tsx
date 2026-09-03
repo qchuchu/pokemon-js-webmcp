@@ -2,8 +2,10 @@ import { useDispatch, useSelector } from "react-redux";
 import styled from "styled-components";
 import { selectPokemon, swapPokemonPositions } from "../state/gameSlice";
 import PokemonRow from "./PokemonRow";
-import { useState } from "react";
+import { useId, useState } from "react";
 import useEvent from "../app/use-event";
+import useMenuRegistration from "../app/use-menu-registration";
+import { getPokemonMetadata } from "../app/use-pokemon-metadata";
 import { Event } from "../app/emitter";
 import Menu from "./Menu";
 import Frame from "./Frame";
@@ -54,6 +56,7 @@ const PokemonList = ({
   moveData,
 }: Props) => {
   const dispatch = useDispatch();
+  const key = useId();
   const pokemon_ = useSelector(selectPokemon);
   const [active, setActive] = useState(0);
   const [selected, setSelected] = useState(false);
@@ -61,6 +64,20 @@ const PokemonList = ({
   const [scroll, setScroll] = useState(0);
 
   const pokemon = customPokemon ?? pokemon_;
+  const visible = pokemon.slice(scroll, scroll + 6);
+
+  // Without this the party screen is a blind spot: the cursor lives in
+  // component state, so a tool reading the game sees no menu at all and an
+  // agent picking a Pokemon is guessing. Disabled while the Switch submenu is
+  // up, so that submenu is the one an agent drives.
+  useMenuRegistration(
+    key,
+    true,
+    visible.map((p) => getPokemonMetadata(p.id).name.toUpperCase()),
+    active,
+    selected,
+    (index) => setActive(index)
+  );
 
   useEvent(Event.Up, () => {
     if (selected) return;
@@ -109,7 +126,7 @@ const PokemonList = ({
   return (
     <>
       <StyledPokemonList>
-        {pokemon.slice(scroll, scroll + 6).map((p, i) => {
+        {visible.map((p, i) => {
           return (
             <PokemonRow
               key={i}
