@@ -20,7 +20,8 @@ import {
 } from "../state/uiSlice";
 import mapData from "../maps/map-data";
 import { store } from "../state/store";
-import { buildSnapshot, waitingFor } from "./snapshot";
+import { battlePhase, buildSnapshot, waitingFor } from "./snapshot";
+import { acceptsInput, CHOOSE_ACTION_STAGE } from "../state/battleSlice";
 import { GameState } from "../state/state-types";
 import { ItemType } from "../app/item-types";
 import { pickDriver } from "../state/session";
@@ -225,5 +226,27 @@ describe("nothing on screen is a dead end", () => {
       encounterPokemon({ id: 10, level: 3, hp: 12, moves: [] })
     );
     expect(waitingFor(store.getState())).toBe("wild-encounter");
+  });
+});
+
+describe("a battle survives the page that started it", () => {
+  // The choreography runs on setTimeout chains. Only the stages that sit
+  // waiting for input can be restored as they are; the rest need picking up at
+  // one that can, or the fight hangs with no timer left to advance it.
+  it("treats the input stages as resumable and the animated ones as not", () => {
+    expect(acceptsInput(CHOOSE_ACTION_STAGE)).toBe(true);
+    [11, 13, 14, 25, 33].forEach((stage) =>
+      expect(acceptsInput(stage)).toBe(true)
+    );
+
+    // Mid-attack, mid-faint, mid-throw, sending out: all timer-driven.
+    [0, 2, 15, 18, 20, 21, 24, 34, 42, 46, 48, 50].forEach((stage) =>
+      expect(acceptsInput(stage)).toBe(false)
+    );
+  });
+
+  it("resumes to a stage that actually wants input", () => {
+    expect(battlePhase(CHOOSE_ACTION_STAGE)).toBe("choose-action");
+    expect(acceptsInput(CHOOSE_ACTION_STAGE)).toBe(true);
   });
 });

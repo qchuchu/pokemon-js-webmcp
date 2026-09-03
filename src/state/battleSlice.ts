@@ -31,6 +31,21 @@ const initialState: BattleState = {
   trainerIntroIndex: -1,
 };
 
+/**
+ * Stages that sit waiting for input, and so survive a reload: the action menu,
+ * the party and move pickers, the forced switch, the move-learning prompt.
+ *
+ * Every other stage is one step of a setTimeout chain. Those timers do not
+ * outlive the page, so a battle restored on one of them has nothing left to
+ * advance it and hangs. Resuming a fight means snapping back to one of these.
+ */
+const INPUT_STAGES = [11, 13, 14, 25, 33];
+
+export const CHOOSE_ACTION_STAGE = 11;
+export const MUST_SEND_OUT_STAGE = 25;
+
+export const acceptsInput = (stage: number) => INPUT_STAGES.includes(stage);
+
 export const battleSlice = createSlice({
   name: "battle",
   initialState,

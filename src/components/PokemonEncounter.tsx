@@ -67,6 +67,9 @@ import { PokemonEncounterType, PokemonInstance } from "../state/state-types";
 import getPokemonEncounter from "../app/pokemon-encounter-helper";
 import PixelImage from "../styles/PixelImage";
 import {
+  acceptsInput,
+  CHOOSE_ACTION_STAGE,
+  MUST_SEND_OUT_STAGE,
   selectAlertText,
   selectClickableNotice,
   selectInvolvedPokemon,
@@ -638,6 +641,11 @@ const PokemonEncounter = () => {
   const stageRef = useRef(stage);
   stageRef.current = stage;
 
+  // Whether this tab is the one running the current fight's timers. False for a
+  // battle it did not start: one restored from the save, or inherited when the
+  // previous driver left. Those have no timers pending anywhere.
+  const runningBattleRef = useRef(false);
+
   const setStage = (value: number) => dispatch(setStageAction(value));
   const setTrainerPokemonIndex = (value: number) =>
     dispatch(setTrainerPokemonIndexAction(value));
@@ -773,6 +781,7 @@ const PokemonEncounter = () => {
     if (!driving) return;
 
     if (!isInBattle) {
+      runningBattleRef.current = false;
       setStage(-1);
       return;
     }
@@ -781,8 +790,20 @@ const PokemonEncounter = () => {
     // a peer joins or leaves. The choreography is shared state, so a stage is
     // already set for a fight in progress: replaying the intro from 0 would
     // rewind the battle under everyone and drop the menu an agent was driving.
-    if (stageRef.current >= 0) return;
+    if (stageRef.current >= 0) {
+      // A fight this tab is not running has no timers pending, here or
+      // anywhere, so a stage mid-animation would hang for ever. Pick it up at
+      // the last point that takes input instead.
+      if (!runningBattleRef.current && !acceptsInput(stageRef.current)) {
+        setStage(
+          active && active.hp <= 0 ? MUST_SEND_OUT_STAGE : CHOOSE_ACTION_STAGE
+        );
+      }
+      runningBattleRef.current = true;
+      return;
+    }
 
+    runningBattleRef.current = true;
     dispatch(resetActivePokemon());
     setStage(0);
     setTimeout(() => {
