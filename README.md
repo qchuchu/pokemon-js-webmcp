@@ -226,6 +226,12 @@ serves `build/` with Caddy, configured entirely through service variables:
 | `RAILPACK_NODE_VERSION=22` | `@supabase/supabase-js` requires Node >= 22 |
 | `CI=false` | Railway sets `CI=true`, which makes `react-scripts build` fail on warnings |
 
+There is deliberately no service worker. The CRA precache served the app shell
+cache-first, so a deploy never reached anyone still holding the previous bundle
+until they cleared their caches by hand. A world shared over the network is
+worse off stale than offline, so `src/index.tsx` calls `unregister()`, which
+removes the worker and its caches from clients that already installed one.
+
 ```bash
 railway up --service pokemon-js -m "<summary>"
 ```

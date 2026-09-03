@@ -19,4 +19,7 @@ root.render(
   </React.StrictMode>
 );
 
-serviceWorkerRegistration.register();
+// Not register(): the precache served the app shell cache-first, so a deploy
+// never reached anyone still holding the old bundle. This removes the worker
+// and its caches from clients that already have it.
+serviceWorkerRegistration.unregister();

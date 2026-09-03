@@ -133,14 +133,52 @@ function checkValidServiceWorker(swUrl: string, config?: Config) {
     });
 }
 
-export function unregister() {
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.ready
-      .then((registration) => {
-        registration.unregister();
-      })
-      .catch((error) => {
-        console.error(error.message);
-      });
+const RELOADED_KEY = "pokemon-sw-cleared";
+
+const alreadyReloaded = () => {
+  try {
+    return sessionStorage.getItem(RELOADED_KEY) === "1";
+  } catch {
+    // Private mode and blocked storage both throw; better to skip the reload
+    // than to risk looping on it.
+    return true;
   }
+};
+
+/**
+ * Removes the service worker and everything it cached.
+ *
+ * The precache served the app shell cache-first, so a deploy did not reach
+ * anyone already holding the old bundle: the page kept booting the previous
+ * build until its caches were cleared by hand. For a game whose state is shared
+ * over the network and driven by agents, a stale client is worse than no
+ * offline support, so the worker is gone rather than merely updated.
+ */
+export function unregister() {
+  if (!("serviceWorker" in navigator)) return;
+
+  // Whether this very page was served by the worker being removed, and so may
+  // be the stale build.
+  const wasControlled = !!navigator.serviceWorker.controller;
+
+  navigator.serviceWorker
+    .getRegistrations()
+    .then((registrations) =>
+      Promise.all(registrations.map((registration) => registration.unregister()))
+    )
+    .then(() => (typeof caches === "undefined" ? [] : caches.keys()))
+    .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+    .then(() => {
+      if (!wasControlled || alreadyReloaded()) return;
+      try {
+        sessionStorage.setItem(RELOADED_KEY, "1");
+      } catch {
+        return;
+      }
+      // The network is authoritative now, so this is the current build.
+      window.location.reload();
+    })
+    .catch((error) => {
+      console.warn("[pokemon] could not clear the service worker", error);
+    });
 }
