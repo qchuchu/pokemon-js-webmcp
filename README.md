@@ -4,6 +4,32 @@ A recreation of the classic Pokemon Red/Blue games built with React and TypeScri
 
 <img width="1675" alt="image" src="https://github.com/user-attachments/assets/7fc7324f-a0cb-4da1-b6a7-3f3941b39117" />
 
+## What is new here (WebMCP Challenge)
+
+This repository is a fork. The Pokemon Red/Blue recreation underneath it is
+[chase-mew/pokemon-js](https://github.com/chase-mew/pokemon-js) by Chase
+Manning, MIT licensed, and its last upstream commit is `e3bbb53` from
+**2025-06-13**. Everything below was added for the challenge, from `cb34b6a`
+onwards, and the commit dates are the evidence:
+
+| What | Where |
+| --- | --- |
+| The WebMCP tool surface: 13 tools over `document.modelContext` | `src/webmcp/` |
+| Agent-shaped reads: ASCII local map, notable tiles, battle and menu state | `src/webmcp/snapshot.ts` |
+| BFS pathfinding over the reducers' own walkability rules | `src/webmcp/pathfinding.ts` |
+| One shared world: actions broadcast over Supabase Realtime, driver election, room-as-save-file | `src/state/session.ts` |
+| Battle state lifted out of component state so every agent watches the same fight | `src/state/battleSlice.ts` |
+| Menu mirroring, so a tool can read the cursor and pick an entry by label | `src/app/use-menu-registration.ts` |
+| Tests for the agent-facing behaviour | `src/webmcp/webmcp.test.ts` |
+
+```bash
+git log --format='%ad %h %s' --date=short   # the boundary is visible in one command
+```
+
+Nothing in the original game logic (maps, battle mechanics, sprites, music) is
+our work; the WebMCP layer, the shared-world layer and the agent-facing state
+are.
+
 ## Features
 
 - 🎮 Classic Pokemon gameplay mechanics
@@ -30,19 +56,26 @@ A recreation of the classic Pokemon Red/Blue games built with React and TypeScri
 
 ## Playing it with agents
 
-The game has no keyboard controls. Everything an agent needs is exposed as a
-[WebMCP](https://github.com/agentcathq/webmcp-react) tool on `document.modelContext`,
-so any MCP client that can reach the page can play. Connect a desktop client
-like Claude Code or Cursor with the WebMCP Bridge Chrome extension.
+People and agents play the *same* avatar, at the same time, in the same world.
+A human presses the on-screen Game Boy buttons; an agent calls the same events
+through [WebMCP](https://github.com/agentcathq/webmcp-react) tools exposed on
+`document.modelContext`. Neither is a second-class citizen: there is one
+trainer, one party, one battle, and whoever acts next moves it.
+
+Open the page in ChatGPT's in-app browser, or in Chrome with
+`chrome://flags/#enable-webmcp-testing` enabled, and the tools below are
+available with no extension or setup.
 
 | Tool | What it does |
 | --- | --- |
 | `get_game_state` | Position, party, bag, what is on screen, and an ASCII map of the surrounding tiles |
+| `look` | Just the surroundings: the ASCII map plus doors, people and items with absolute coordinates |
 | `walk_to` | Pathfind to a tile, stopping early on encounters and doors |
 | `walk` | Step in one direction; walking into something turns you to face it |
 | `interact` | Press A: talk, read signs, advance dialogue |
 | `go_to_and_interact` | Walk up to an NPC or sign, face it, talk to it |
-| `select_menu_item` | Choose a menu entry by label |
+| `select_menu_item` | Choose a menu entry by label, including which Pokemon to send out |
+| `swap_party_slots` | Reorder the party, so who leads is chosen without burning a turn |
 | `press_button` | Raw Game Boy button, for anything else |
 | `wait` | Let animations and transitions finish |
 | `get_party_agents` | Who else is in this world, and their recent notes |
@@ -107,8 +140,8 @@ no coordination and hands over on its own when the driver leaves.
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/pokemon-js.git
-cd pokemon-js
+git clone https://github.com/qchuchu/pokemon-js-webmcp.git
+cd pokemon-js-webmcp
 ```
 
 2. Install dependencies:
@@ -127,9 +160,10 @@ The game will be available at `http://localhost:3000`
 
 ## Controls
 
-There are none. The keyboard handler has been removed: the game is driven by
-agents through the WebMCP tools above. The on-screen Game Boy buttons still
-work if you want to take over or watch along.
+The on-screen Game Boy buttons - D-pad, A, B, Start - are live, so you can take
+over or play alongside an agent at any time. There is no keyboard handler; the
+buttons and the WebMCP tools emit the same events, which is what lets a person
+and an agent share one avatar.
 
 Opening the page drops you straight into the running world - there is no boot
 or title sequence to click through. A badge in the top right shows how many
