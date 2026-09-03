@@ -7,13 +7,20 @@ import gameReducer, {
   completeQuest,
   encounterPokemon,
   encounterTrainer,
+  endEncounter,
+  faintToTrainer,
   hydrate,
   moveUp,
   payForQuest,
 } from "../state/gameSlice";
+import {
+  hidePokemonCenterMenu,
+  setScreenText,
+  showPokemonCenterMenu,
+} from "../state/uiSlice";
 import mapData from "../maps/map-data";
 import { store } from "../state/store";
-import { buildSnapshot } from "./snapshot";
+import { buildSnapshot, waitingFor } from "./snapshot";
 import { GameState } from "../state/state-types";
 import { ItemType } from "../app/item-types";
 import { pickDriver } from "../state/session";
@@ -185,5 +192,38 @@ describe("agent-facing payloads", () => {
       name: trainer.npc.name,
       canBattle: trainer.npc.canBattle,
     });
+  });
+});
+
+describe("nothing on screen is a dead end", () => {
+  // The store is shared across this file and an earlier test leaves a trainer
+  // encounter behind, so start from a screen with nothing on it.
+  beforeEach(() => {
+    store.dispatch(setScreenText(null));
+    store.dispatch(hidePokemonCenterMenu());
+    store.dispatch(endEncounter());
+    store.dispatch(faintToTrainer());
+  });
+
+  it("names what is holding input, so a frozen screen says why", () => {
+    expect(waitingFor(store.getState())).toBeNull();
+
+    // The Pokemon Center freezes the game and draws its own text box. Before
+    // it published the line, this state was a snapshot with no dialogue, no
+    // menu and no reason given, and an agent had nothing telling it to press A.
+    store.dispatch(showPokemonCenterMenu());
+    store.dispatch(setScreenText("Welcome to our POKéMON CENTER!"));
+
+    const screen = buildSnapshot(store.getState()).screen;
+    expect(screen.frozen).toBe(true);
+    expect(screen.waitingFor).toBe("dialogue");
+    expect(screen.dialogue).toBe("Welcome to our POKéMON CENTER!");
+  });
+
+  it("reports an encounter as what wants input, over any menu", () => {
+    store.dispatch(
+      encounterPokemon({ id: 10, level: 3, hp: 12, moves: [] })
+    );
+    expect(waitingFor(store.getState())).toBe("wild-encounter");
   });
 });

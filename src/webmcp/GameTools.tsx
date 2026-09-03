@@ -12,7 +12,7 @@ import {
   setMoving,
   swapPokemonPositions,
 } from "../state/gameSlice";
-import { selectActiveMenu, selectFrozen } from "../state/uiSlice";
+import { selectActiveMenu } from "../state/uiSlice";
 import { Direction, PosType } from "../state/state-types";
 import findPath, { adjacentTiles } from "./pathfinding";
 import {
@@ -21,6 +21,7 @@ import {
   describeTile,
   facingOffset,
   MAP_LEGEND,
+  waitingFor,
 } from "./snapshot";
 import {
   AGENT_ID,
@@ -94,24 +95,13 @@ const MOVES: Record<Direction, () => { type: string }> = {
   [Direction.Right]: moveRight,
 };
 
-/** Anything that wants input before the avatar may walk again. */
-const interruption = (): string | null => {
-  const state = store.getState();
-  if (state.ui.gameboyMenu) return "boot-screen";
-  if (state.ui.titleMenu) return "title-screen";
-  if (state.game.pokemonEncounter) return "wild-encounter";
-  if (state.game.trainerEncounter) return "trainer-encounter";
-  if (state.ui.text) return "dialogue";
-  if (selectFrozen(state)) return "menu-open";
-  return null;
-};
 
 const walkPath = async (path: Direction[]) => {
   const walked: Direction[] = [];
   store.dispatch(setMoving(true));
   try {
     for (const direction of path) {
-      const blocked = interruption();
+      const blocked = waitingFor(store.getState());
       if (blocked) {
         return { walked, stoppedBy: blocked, arrived: false };
       }
@@ -233,7 +223,7 @@ const GameTools = () => {
       y: z.number().int().describe("Target tile y, absolute on the current map"),
     }),
     handler: async ({ x, y }) => {
-      const blocked = interruption();
+      const blocked = waitingFor(store.getState());
       if (blocked) {
         return fail(`Cannot walk while ${blocked} is on screen.`, summary());
       }
@@ -266,7 +256,7 @@ const GameTools = () => {
       steps: z.number().int().min(1).max(50).default(1),
     }),
     handler: async ({ direction, steps }) => {
-      const blocked = interruption();
+      const blocked = waitingFor(store.getState());
       if (blocked) {
         return fail(`Cannot walk while ${blocked} is on screen.`, summary());
       }
@@ -306,7 +296,7 @@ const GameTools = () => {
       y: z.number().int().describe("Tile of the NPC, sign or object"),
     }),
     handler: async ({ x, y }) => {
-      const blocked = interruption();
+      const blocked = waitingFor(store.getState());
       if (blocked) {
         return fail(`Cannot walk while ${blocked} is on screen.`, summary());
       }

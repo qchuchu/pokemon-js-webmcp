@@ -13,7 +13,12 @@ import {
   isWall,
 } from "../app/map-helper";
 import { RootState } from "../state/store";
-import { selectActiveMenu, selectFrozen, selectMenus } from "../state/uiSlice";
+import {
+  selectActiveMenu,
+  selectFrozen,
+  selectMenus,
+  selectScreenText,
+} from "../state/uiSlice";
 import { Direction, PokemonInstance, PosType } from "../state/state-types";
 
 export const VIEW_RADIUS = 6;
@@ -177,6 +182,23 @@ export const describeTile = (
   return "walkable, but no route reaches it from here";
 };
 
+/**
+ * What wants input before the avatar may walk again, or null when nothing does.
+ * Shared with the movement tools so a refusal and the snapshot always name the
+ * same thing: an agent that reads "menu-open" knows to look at the menu rather
+ * than retrying the walk.
+ */
+export const waitingFor = (state: RootState): string | null => {
+  if (state.ui.gameboyMenu) return "boot-screen";
+  if (state.ui.titleMenu) return "title-screen";
+  if (state.game.pokemonEncounter) return "wild-encounter";
+  if (state.game.trainerEncounter) return "trainer-encounter";
+  if (state.ui.text) return "dialogue";
+  if (state.ui.screenText) return "dialogue";
+  if (selectFrozen(state)) return "menu-open";
+  return null;
+};
+
 export const MAP_LEGEND =
   "@ you | . walkable | # blocked | ~ tall grass (wild encounters) | " +
   "D door/exit to another map | S readable sign or NPC to talk to | " +
@@ -243,10 +265,13 @@ export const buildSnapshot = (state: RootState) => {
       // While frozen, movement tools are rejected: something on screen wants
       // input first (a menu, a text box, a battle).
       frozen: selectFrozen(state),
+      // Names what is holding input, so a frozen screen is never a dead end.
+      waitingFor: waitingFor(state),
       transitioning: ui.blackScreen,
       titleScreen: ui.titleMenu,
       bootScreen: ui.gameboyMenu,
-      dialogue: ui.text,
+      // Screens that draw their own text box publish through screenText.
+      dialogue: ui.text ?? selectScreenText(state),
       activeMenu: activeMenu && {
         items: activeMenu.items,
         cursor: activeMenu.cursor,

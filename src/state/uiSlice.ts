@@ -36,6 +36,11 @@ export interface MenuSnapshot {
 
 interface UiState {
   text: string[] | null;
+  // Screens that draw their own text box instead of going through `text`
+  // publish it here, so a tool reading the game can see what is on screen and
+  // what it is waiting for. Without it those screens freeze the game with a
+  // snapshot that shows no dialogue and no menu at all.
+  screenText: string | null;
   startMenu: boolean;
   itemsMenu: boolean;
   playerMenu: boolean;
@@ -58,6 +63,7 @@ interface UiState {
 
 const initialState: UiState = {
   text: null,
+  screenText: null,
   startMenu: false,
   itemsMenu: false,
   playerMenu: false,
@@ -117,6 +123,9 @@ export const uiSlice = createSlice({
     },
     hideText: (state) => {
       state.text = null;
+    },
+    setScreenText: (state, action: PayloadAction<string | null>) => {
+      state.screenText = action.payload;
     },
     showActionOnPokemon: (
       state,
@@ -213,6 +222,7 @@ export const {
   hideGameboyMenu,
   showText,
   hideText,
+  setScreenText,
   showActionOnPokemon,
   hideActionOnPokemon,
   throwPokeball,
@@ -239,6 +249,8 @@ export const {
 } = uiSlice.actions;
 
 export const selectText = (state: RootState) => state.ui.text;
+
+export const selectScreenText = (state: RootState) => state.ui.screenText;
 
 export const selectStartMenu = (state: RootState) => state.ui.startMenu;
 

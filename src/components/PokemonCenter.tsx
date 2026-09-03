@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import styled from "styled-components";
 import useEvent from "../app/use-event";
 import emitter, { Event } from "../app/emitter";
@@ -8,6 +8,7 @@ import {
   hidePokemonCenterMenu,
   selectPokemonCenterMenu,
   selectStartMenu,
+  setScreenText,
   showPokemonCenterMenu,
 } from "../state/uiSlice";
 import Frame from "./Frame";
@@ -72,8 +73,6 @@ const PokemonCenter = () => {
     }
   });
 
-  if (!show) return null;
-
   const text = () => {
     if (stage === 0) return "Welcome to our POKéMON CENTER!";
     if ([1, 2].includes(stage))
@@ -82,6 +81,19 @@ const PokemonCenter = () => {
     if (stage === 4) return "Thank you! Your POKéMON are fighting fit!";
     if (stage === 5) return "We hope to see you again!";
   };
+
+  // This screen draws its own text box and freezes the game while it is up, so
+  // without publishing the line an agent sees a frozen screen with no dialogue
+  // and no menu, and has nothing telling it to press A.
+  const line = show ? text() ?? null : null;
+  useEffect(() => {
+    dispatch(setScreenText(line));
+    return () => {
+      dispatch(setScreenText(null));
+    };
+  }, [line, dispatch]);
+
+  if (!show) return null;
 
   return (
     <StyledPokemonCenter>
