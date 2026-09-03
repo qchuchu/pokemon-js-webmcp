@@ -160,10 +160,18 @@ The game will be available at `http://localhost:3000`
 
 ## Controls
 
-The on-screen Game Boy buttons - D-pad, A, B, Start - are live, so you can take
-over or play alongside an agent at any time. There is no keyboard handler; the
-buttons and the WebMCP tools emit the same events, which is what lets a person
-and an agent share one avatar.
+| Key | Button |
+| --- | --- |
+| Arrows, or `WASD` | D-pad |
+| `Enter` or `Z` | A |
+| `Shift`, `X` or `Backspace` | B |
+| `Space` | Start |
+| `Esc` | Select |
+
+The on-screen Game Boy is live too: click or hold the D-pad, tap A, B, Start
+and Select. Keys, buttons and the WebMCP tools all emit the same events, which
+is what lets a person and an agent share one avatar - you can take a turn in a
+battle an agent is fighting, and it will read the result on its next call.
 
 Opening the page drops you straight into the running world - there is no boot
 or title sequence to click through. A badge in the top right shows how many

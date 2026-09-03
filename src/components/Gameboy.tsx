@@ -44,6 +44,9 @@ const Gameboy = ({ children }: Props) => {
               onClick={() => emitter.emit(Event.Up)}
               onTouchStart={() => emitter.emit(Event.StartUp)}
               onTouchEnd={() => emitter.emit(Event.StopUp)}
+              onMouseDown={() => emitter.emit(Event.StartUp)}
+              onMouseUp={() => emitter.emit(Event.StopUp)}
+              onMouseLeave={() => emitter.emit(Event.StopUp)}
             >
               <i className="fa fa-caret-up"></i>
             </div>
@@ -52,6 +55,9 @@ const Gameboy = ({ children }: Props) => {
               onClick={() => emitter.emit(Event.Right)}
               onTouchStart={() => emitter.emit(Event.StartRight)}
               onTouchEnd={() => emitter.emit(Event.StopRight)}
+              onMouseDown={() => emitter.emit(Event.StartRight)}
+              onMouseUp={() => emitter.emit(Event.StopRight)}
+              onMouseLeave={() => emitter.emit(Event.StopRight)}
             >
               <i className="fa fa-caret-right"></i>
             </div>
@@ -60,6 +66,9 @@ const Gameboy = ({ children }: Props) => {
               onClick={() => emitter.emit(Event.Down)}
               onTouchStart={() => emitter.emit(Event.StartDown)}
               onTouchEnd={() => emitter.emit(Event.StopDown)}
+              onMouseDown={() => emitter.emit(Event.StartDown)}
+              onMouseUp={() => emitter.emit(Event.StopDown)}
+              onMouseLeave={() => emitter.emit(Event.StopDown)}
             >
               <i className="fa fa-caret-down"></i>
             </div>
@@ -68,6 +77,9 @@ const Gameboy = ({ children }: Props) => {
               onClick={() => emitter.emit(Event.Left)}
               onTouchStart={() => emitter.emit(Event.StartLeft)}
               onTouchEnd={() => emitter.emit(Event.StopLeft)}
+              onMouseDown={() => emitter.emit(Event.StartLeft)}
+              onMouseUp={() => emitter.emit(Event.StopLeft)}
+              onMouseLeave={() => emitter.emit(Event.StopLeft)}
             >
               <i className="fa fa-caret-left"></i>
             </div>
@@ -84,7 +96,12 @@ const Gameboy = ({ children }: Props) => {
         </div>
 
         <div className="start-select">
-          <div className="select">SELECT</div>
+          <div
+            className="select"
+            onClick={() => emitter.emit(Event.Select)}
+          >
+            SELECT
+          </div>
           <div className="start" onClick={() => emitter.emit(Event.Start)}>
             START
           </div>

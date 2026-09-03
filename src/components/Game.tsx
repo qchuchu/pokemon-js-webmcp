@@ -8,6 +8,7 @@ import MapChangeHandler from "./MapChangeHandler";
 import StartMenu from "./StartMenu";
 import MovementHandler from "./MovementHandler";
 import GameTools from "../webmcp/GameTools";
+import KeyboardHandler from "./KeyboardHandler";
 import ItemsMenu from "./ItemsMenu";
 import PlayerMenu from "./PlayerMenu";
 import PixelImage from "../styles/PixelImage";
@@ -152,6 +153,7 @@ const Game = () => {
       {/* Handlers */}
       <MapChangeHandler />
       <GameTools />
+      <KeyboardHandler />
       <MovementHandler />
       <SoundHandler />
       <EncounterHandler />
