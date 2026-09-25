@@ -53,7 +53,10 @@ const MoveSelect = ({ show, select, close }: Props) => {
 
   const [active, setActive] = useState(0);
 
-  const move = useMoveMetadata(activePokemon.moves[active].id);
+  // The cursor outlives a switch: coming from a Pokemon with more moves it can
+  // point past the end of the new one's list.
+  const current = activePokemon.moves[active] ?? activePokemon.moves[0];
+  const move = useMoveMetadata(current.id);
 
   return (
     <>
@@ -83,7 +86,7 @@ const MoveSelect = ({ show, select, close }: Props) => {
             <StatsRow style={{ textAlign: "center" }}>{move?.type}</StatsRow>
             <StatsRow
               style={{ textAlign: "right" }}
-            >{`${activePokemon.moves[active].pp}/${move.pp}`}</StatsRow>
+            >{`${current.pp}/${move.pp}`}</StatsRow>
           </Frame>
         </Stats>
       )}

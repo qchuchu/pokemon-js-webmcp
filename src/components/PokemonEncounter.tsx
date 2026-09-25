@@ -52,6 +52,7 @@ import {
   selectStartMenu,
   showEvolution,
   showItemsMenu,
+  setScreenText,
   showTextThenAction,
   stopThrowingPokeball,
 } from "../state/uiSlice";
@@ -557,6 +558,19 @@ const BlackOverlay = styled.div`
   z-index: 100;
 `;
 
+/**
+ * Publishes the battle text box so get_game_state can read it: without it an
+ * agent sees a frozen battle with no message and cannot tell that A is due.
+ */
+const PublishBattleText = ({ text }: { text: string }) => {
+  const dispatch = useDispatch();
+  useEffect(() => {
+    dispatch(setScreenText(text || null));
+  }, [text, dispatch]);
+  useEffect(() => () => void dispatch(setScreenText(null)), [dispatch]);
+  return null;
+};
+
 const PokemonEncounter = () => {
   const dispatch = useDispatch();
   const enemy = useSelector(selectPokemonEncounter);
@@ -689,8 +703,10 @@ const PokemonEncounter = () => {
     // Handle evolutions
     handleEvolution();
 
-    // Handling switching to the next processing pokemon
-    if (processingInvolvedPokemon < involvedPokemon.length - 1) {
+    // Handling switching to the next processing pokemon. A blackout skips it:
+    // nobody earns XP from a lost fight, and resuming at stage 21 kept the
+    // trainer battle going after the player woke up at the Pokemon Center.
+    if (!exitBattle && processingInvolvedPokemon < involvedPokemon.length - 1) {
       const nextIndex = processingInvolvedPokemon + 1;
       if (enemy) {
         dispatch(
@@ -815,7 +831,11 @@ const PokemonEncounter = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInBattle, dispatch, driving]);
 
-  const throwPokeball = () => {
+  const throwPokeball = (
+    onSentOut: () => void = () => {
+      setStage(11);
+    }
+  ) => {
     setTimeout(() => {
       setStage(4);
     }, MOVEMENT_ANIMATION);
@@ -837,9 +857,20 @@ const PokemonEncounter = () => {
     setTimeout(() => {
       setStage(10);
     }, MOVEMENT_ANIMATION * 2 + FRAME_DURATION * 5);
+    setTimeout(onSentOut, MOVEMENT_ANIMATION * 2 + FRAME_DURATION * 5 + 500);
+  };
+
+  // Switching spends the turn, so the opponent attacks whoever came in.
+  const enemyAttacksNewcomer = (newcomer: PokemonInstance) => {
+    if (!enemy) return setStage(11);
+    const enemyMove = getMoveMetadata(getRandomEnemyMove());
+    const { us } = processMoveResult(
+      processMove(newcomer, enemy, enemyMove.id, false),
+      false
+    );
     setTimeout(() => {
-      setStage(11);
-    }, MOVEMENT_ANIMATION * 2 + FRAME_DURATION * 5 + 500);
+      setStage(us.hp <= 0 ? 24 : 11);
+    }, ATTACK_ANIMATION + 1000);
   };
 
   /**
@@ -859,9 +890,23 @@ const PokemonEncounter = () => {
       );
       return;
     }
+    if (index === activePokemonIndex && active && active.hp > 0) {
+      setClickableNotice(
+        `${getPokemonMetadata(chosen.id).name.toUpperCase()} is already out!`
+      );
+      return;
+    }
     dispatch(setActivePokemon(index));
-    setInvolvedPokemon([...involvedPokemon, index]);
-    throwPokeball();
+    if (!involvedPokemon.includes(index)) {
+      setInvolvedPokemon([...involvedPokemon, index]);
+    }
+    // A replacement for a fainted Pokemon comes in for free; a voluntary
+    // switch (from the party list at stage 13) costs the turn.
+    const voluntary = stage === 13;
+    // Leave the party list now: it stays mounted until the throw animation
+    // moves the stage on, and an agent reading it would pick again.
+    setStage(3);
+    throwPokeball(voluntary ? () => enemyAttacksNewcomer(chosen) : undefined);
   };
 
   const throwPokeballAtEnemy = (end: number = 39) => {
@@ -1488,6 +1533,7 @@ const PokemonEncounter = () => {
             >
               {text()}
             </Frame>
+            <PublishBattleText text={text()} />
           </TextContainer>
           <Menu
             compact
