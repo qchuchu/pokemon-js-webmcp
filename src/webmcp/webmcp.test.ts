@@ -1,6 +1,6 @@
 // Import order matters here: pathfinding pulls in the map layer, which used to
 // enter a gameSlice <-> use-item-data cycle and leave ItemType undefined.
-import findPath, { adjacentTiles } from "./pathfinding";
+import findPath, { adjacentTiles, isMapChange } from "./pathfinding";
 import { MapId } from "../maps/map-types";
 import { canWalk } from "../app/map-helper";
 import gameReducer, {
@@ -24,6 +24,7 @@ import {
   battlePhase,
   buildMapOverview,
   buildSnapshot,
+  stageWaitsForA,
   waitingFor,
 } from "./snapshot";
 import { acceptsInput, CHOOSE_ACTION_STAGE } from "../state/battleSlice";
@@ -179,6 +180,18 @@ describe("agent-facing payloads", () => {
     expect(path).toEqual(["left", "left", "left", "left"]);
   });
 
+  it("never crosses a door or ladder on the way somewhere else", () => {
+    // Mt. Moon 3F: (26,16) sits in a pocket whose only way out is the ladder
+    // at (25,15). The old search walked straight over it, which dropped the
+    // avatar on 1F every time and looped for ever. Reaching the far side of
+    // the floor has to be reported as impossible from here, while the ladder
+    // itself stays a valid destination.
+    const floor = MapId.MtMoon3f;
+    expect(isMapChange(mapData[floor], 25, 15)).toBe(true);
+    expect(findPath({ x: 26, y: 16 }, { x: 5, y: 5 }, floor, [])).toBeNull();
+    expect(findPath({ x: 26, y: 16 }, { x: 25, y: 15 }, floor, [])).not.toBeNull();
+  });
+
   it("keeps routing around an item that is not the destination", () => {
     const forest = MapId.ViridianForrest;
     const path = findPath({ x: 5, y: 31 }, { x: 5, y: 30 }, forest, []);
@@ -239,6 +252,33 @@ describe("nothing on screen is a dead end", () => {
       encounterPokemon({ id: 10, level: 3, hp: 12, moves: [] })
     );
     expect(waitingFor(store.getState())).toBe("wild-encounter");
+  });
+
+  it("shows what a trainer says before the fight, and names the fight", () => {
+    // The intro draws its own text box. Without it in the snapshot, agents saw
+    // a frozen screen with no dialogue and chose to wait, which never ends.
+    const trainer = (mapData[MapId.ViridianForrest].trainers ?? [])[0];
+    store.dispatch(encounterTrainer(trainer));
+    const screen = buildSnapshot(store.getState()).screen;
+    expect(screen.waitingFor).toBe("trainer-encounter");
+    expect(screen.dialogue).toBeTruthy();
+
+    store.dispatch(
+      encounterPokemon({ id: trainer.pokemon[0].id, level: 3, hp: 10, moves: [] })
+    );
+    expect(waitingFor(store.getState())).toBe("trainer-battle");
+  });
+
+  it("tells a text box waiting for A apart from an animation", () => {
+    // "LASS wants to fight!" used to read as animating, so interact() sat out
+    // its whole wait before pressing, and agents picked wait() instead.
+    expect(battlePhase(2)).toBe("intro");
+    [2, 20, 21, 22, 24, 48, 49, 50, 52].forEach((stage) =>
+      expect(stageWaitsForA(stage)).toBe(true)
+    );
+    [3, 11, 13, 14, 15, 18, 34, 46].forEach((stage) =>
+      expect(stageWaitsForA(stage)).toBe(false)
+    );
   });
 });
 

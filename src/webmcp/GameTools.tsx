@@ -22,6 +22,7 @@ import {
   describeTile,
   facingOffset,
   MAP_LEGEND,
+  stageWaitsForA,
   waitingFor,
 } from "./snapshot";
 import {
@@ -87,7 +88,29 @@ const awaitInput = async (budget = 4000) => {
   for (let waited = 0; waited < budget; waited += 60) {
     const state = store.getState();
     if (!state.game.pokemonEncounter) return;
+    if (stageWaitsForA(state.battle.stage)) return;
     if (battlePhase(state.battle.stage) !== "animating") return;
+    await settle(60);
+  }
+};
+
+/**
+ * A confirmed entry can leave its menu on screen for a moment, like the party
+ * list while the switch animation starts. Returning then shows a menu that
+ * looks live, and an agent picks from it again. Wait until the menu or the
+ * battle stage has moved on, or give up after a short while for menus that
+ * legitimately stay open.
+ */
+const menuSettled = async (
+  before: { key: string; items: string[] },
+  stageBefore: number,
+  budget = 2000
+) => {
+  for (let waited = 0; waited < budget; waited += 60) {
+    const state = store.getState();
+    const now = selectActiveMenu(state);
+    if (!now || now.key !== before.key || now.items.join() !== before.items.join()) return;
+    if (state.battle.stage !== stageBefore) return;
     await settle(60);
   }
 };
@@ -436,7 +459,9 @@ const GameTools = () => {
 
       emitter.emit(Event.SetMenuCursor, { key: menu.key, index: target });
       await settle(60);
+      const stageBefore = store.getState().battle.stage;
       await press(Event.A, 160);
+      await menuSettled(menu, stageBefore);
       return ok({ chose: menu.items[target], ...summary() });
     },
   });

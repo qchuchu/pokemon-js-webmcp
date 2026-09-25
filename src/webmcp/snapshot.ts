@@ -20,6 +20,7 @@ import {
   selectScreenText,
 } from "../state/uiSlice";
 import { Direction, PokemonInstance, PosType } from "../state/state-types";
+import { isMapChange } from "./pathfinding";
 
 export const VIEW_RADIUS = 6;
 
@@ -44,10 +45,6 @@ export const facingOffset = (direction: Direction): PosType => {
 const hasText = (map: MapType, x: number, y: number) =>
   !!(map.text[y] && map.text[y][x] && map.text[y][x].length > 0);
 
-const isMapChange = (map: MapType, x: number, y: number) =>
-  !!(map.maps[y] && map.maps[y][x]) ||
-  isExit(map.exits, x, y) ||
-  !!(map.teleports && map.teleports[y] && map.teleports[y][x]);
 
 /**
  * Which map a door leads to. The map data already knows, so a door reported
@@ -147,8 +144,20 @@ const renderArea = (state: RootState, bounds: Bounds): string[] => {
  * The battle choreography is a numbered stage machine. Agents should not have
  * to learn the numbers, so name the phases that matter for deciding what to do.
  */
+/**
+ * Stages whose text box waits for A. Everything else in a battle either runs on
+ * a timer or asks through a menu, so interact() should press straight away here
+ * rather than wait for an animation that is not playing.
+ */
+const STAGES_WAITING_FOR_A = new Set([
+  2, 12, 20, 21, 22, 24, 26, 27, 29, 30, 31, 32, 42, 43, 44, 45, 48, 49, 50,
+  51, 52,
+]);
+export const stageWaitsForA = (stage: number) => STAGES_WAITING_FOR_A.has(stage);
+
 export const battlePhase = (stage: number): string => {
   if (stage < 0) return "not-in-battle";
+  if (stage === 2) return "intro";
   if (stage <= 10 || (stage >= 34 && stage <= 41)) return "animating";
   if (stage === 11) return "choose-action";
   if (stage === 12) return "fled";
@@ -229,12 +238,26 @@ export const describeTile = (
 export const waitingFor = (state: RootState): string | null => {
   if (state.ui.gameboyMenu) return "boot-screen";
   if (state.ui.titleMenu) return "title-screen";
-  if (state.game.pokemonEncounter) return "wild-encounter";
+  if (state.game.pokemonEncounter) {
+    return state.game.trainerEncounter ? "trainer-battle" : "wild-encounter";
+  }
   if (state.game.trainerEncounter) return "trainer-encounter";
   if (state.ui.text) return "dialogue";
   if (state.ui.screenText) return "dialogue";
   if (selectFrozen(state)) return "menu-open";
   return null;
+};
+
+/**
+ * A trainer who spotted you talks before the battle starts, in a text box of
+ * its own that never reaches ui.text, so name it here or the screen reads as
+ * frozen with nothing to answer.
+ */
+const trainerIntroLine = (state: RootState): string | null => {
+  const trainer = state.game.trainerEncounter;
+  if (!trainer || state.game.pokemonEncounter) return null;
+  const line = trainer.intro[state.battle.trainerIntroIndex];
+  return line ?? `${trainer.npc.name.toUpperCase()} is about to challenge you. Press A.`;
 };
 
 export const MAP_LEGEND =
@@ -340,7 +363,10 @@ export const buildSnapshot = (state: RootState) => {
       titleScreen: ui.titleMenu,
       bootScreen: ui.gameboyMenu,
       // Screens that draw their own text box publish through screenText.
-      dialogue: ui.text ?? selectScreenText(state),
+      dialogue:
+        ui.text ??
+        (encounter ? null : selectScreenText(state)) ??
+        trainerIntroLine(state),
       activeMenu: activeMenu && {
         items: activeMenu.items,
         cursor: activeMenu.cursor,
@@ -366,7 +392,13 @@ export const buildSnapshot = (state: RootState) => {
           // is in screen.activeMenu and select_menu_item drives it.
           phase: battlePhase(state.battle.stage),
           stage: state.battle.stage,
-          message: state.battle.clickableNotice ?? state.battle.alertText,
+          // The line in the battle text box, e.g. "SQUIRTLE gained 12 EXP.
+          // points!". When waitsForA is true, interact() moves it on.
+          message:
+            state.battle.clickableNotice ??
+            state.battle.alertText ??
+            selectScreenText(state),
+          waitsForA: stageWaitsForA(state.battle.stage),
           trainerIntro:
             state.battle.trainerIntroIndex >= 0
               ? game.trainerEncounter?.intro[state.battle.trainerIntroIndex]

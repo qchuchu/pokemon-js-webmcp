@@ -1,6 +1,6 @@
 import mapData from "../maps/map-data";
-import { MapId } from "../maps/map-types";
-import { canWalk, isItem } from "../app/map-helper";
+import { MapId, MapType } from "../maps/map-types";
+import { canWalk, isExit, isItem } from "../app/map-helper";
 import { Direction, PosType } from "../state/state-types";
 
 const STEPS: { direction: Direction; dx: number; dy: number }[] = [
@@ -12,10 +12,17 @@ const STEPS: { direction: Direction; dx: number; dy: number }[] = [
 
 const key = (x: number, y: number) => `${x},${y}`;
 
+export const isMapChange = (map: MapType, x: number, y: number) =>
+  !!(map.maps[y] && map.maps[y][x]) ||
+  isExit(map.exits, x, y) ||
+  !!(map.teleports && map.teleports[y] && map.teleports[y][x]);
+
 /**
  * canWalk treats an uncollected item as solid, but stepping onto it is exactly
  * how the game picks it up. Allow it as a destination only, so intermediate
- * tiles stay ones the reducers accept.
+ * tiles stay ones the reducers accept. Doors and ladders are the opposite:
+ * walkable, but crossing one on the way elsewhere drops the avatar on another
+ * map, so they only count as the destination.
  */
 const passable = (
   x: number,
@@ -23,11 +30,14 @@ const passable = (
   mapId: MapId,
   collectedItems: string[],
   to: PosType
-) =>
-  canWalk(x, y, mapId, collectedItems) ||
-  (x === to.x &&
-    y === to.y &&
-    isItem(mapData[mapId].items, x, y, collectedItems, mapId));
+) => {
+  const isDestination = x === to.x && y === to.y;
+  if (!isDestination && isMapChange(mapData[mapId], x, y)) return false;
+  return (
+    canWalk(x, y, mapId, collectedItems) ||
+    (isDestination && isItem(mapData[mapId].items, x, y, collectedItems, mapId))
+  );
+};
 
 /**
  * Breadth-first search over the same walkability rules the reducers use, so a
