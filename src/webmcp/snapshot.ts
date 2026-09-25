@@ -413,6 +413,9 @@ export const buildSnapshot = (state: RootState) => {
           },
           opponent: {
             species: getPokemonMetadata(encounter.id).name,
+            // Without the types an agent cannot tell a super effective move
+            // from a wasted one.
+            types: getPokemonMetadata(encounter.id).types,
             level: encounter.level,
             hp: encounter.hp,
             maxHp: getPokemonStats(encounter.id, encounter.level).hp,

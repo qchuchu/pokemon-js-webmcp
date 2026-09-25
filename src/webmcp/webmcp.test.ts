@@ -215,6 +215,7 @@ describe("agent-facing payloads", () => {
     );
     const battle = buildSnapshot(store.getState()).battle;
     expect(battle?.kind).toBe("trainer");
+    expect(battle?.opponent.types.length).toBeGreaterThan(0);
     expect(JSON.stringify(battle)).not.toContain("data:image");
     expect(battle?.trainer).toEqual({
       name: trainer.npc.name,
