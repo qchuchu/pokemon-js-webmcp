@@ -271,6 +271,11 @@ const GameTools = () => {
         return fail(`Party has ${party.length} Pokemon; slots are 0..${party.length - 1}.`);
       }
       if (a === b) return fail("Those are the same slot.");
+      // Mid-battle the reorder moves the active index too, so the Pokemon in
+      // the fight changes without a turn being spent. Switch with PKMN instead.
+      if (store.getState().game.pokemonEncounter) {
+        return fail("Cannot reorder the party during a battle; use PKMN in the battle menu to switch.", summary());
+      }
 
       store.dispatch(swapPokemonPositions([a, b]));
       await settle(60);
