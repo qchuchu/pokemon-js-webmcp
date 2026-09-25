@@ -17,6 +17,7 @@ import {
   hidePokemonCenterMenu,
   setScreenText,
   showPokemonCenterMenu,
+  showTextThenAction,
 } from "../state/uiSlice";
 import mapData from "../maps/map-data";
 import { store } from "../state/store";
@@ -245,6 +246,16 @@ describe("nothing on screen is a dead end", () => {
     expect(screen.frozen).toBe(true);
     expect(screen.waitingFor).toBe("dialogue");
     expect(screen.dialogue).toBe("Welcome to our POKéMON CENTER!");
+  });
+
+  it("shows the line an item pickup waits on", () => {
+    // Picking up an item draws "Blue found Moon Stone!" through
+    // textThenAction; without it the snapshot said menu-open with no menu.
+    store.dispatch(showTextThenAction({ text: ["Blue found Moon Stone!"], action: () => {} }));
+    const screen = buildSnapshot(store.getState()).screen;
+    expect(screen.waitingFor).toBe("dialogue");
+    expect(screen.dialogue).toBe("Blue found Moon Stone!");
+    store.dispatch(showTextThenAction(null));
   });
 
   it("reports an encounter as what wants input, over any menu", () => {

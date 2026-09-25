@@ -242,7 +242,7 @@ export const waitingFor = (state: RootState): string | null => {
     return state.game.trainerEncounter ? "trainer-battle" : "wild-encounter";
   }
   if (state.game.trainerEncounter) return "trainer-encounter";
-  if (state.ui.text) return "dialogue";
+  if (state.ui.text || state.ui.textThenAction) return "dialogue";
   if (state.ui.screenText) return "dialogue";
   if (selectFrozen(state)) return "menu-open";
   return null;
@@ -365,6 +365,8 @@ export const buildSnapshot = (state: RootState) => {
       // Screens that draw their own text box publish through screenText.
       dialogue:
         ui.text ??
+        // "Blue found Moon Stone!" and other lines that run an action once read.
+        (ui.textThenAction ? ui.textThenAction.text.join(" ") : null) ??
         (encounter ? null : selectScreenText(state)) ??
         trainerIntroLine(state),
       activeMenu: activeMenu && {
